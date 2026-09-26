@@ -1,0 +1,124 @@
+[
+  {
+    "id": "hub",
+    "label": "EdD Community Center",
+    "url": "https://sites.google.com/antioch.edu/eddcommunitycenter/edd-program-info",
+    "approved": true,
+    "source": "Provided in project brief",
+    "usedBy": [
+      {
+        "section": "The Weeks Ahead",
+        "title": "Writing together: a focused hour"
+      },
+      {
+        "section": "EdD Community",
+        "title": "Connection is part of the work"
+      },
+      {
+        "section": "Stay Connected / Need Help",
+        "title": "Keep the conversation going"
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "dissertation",
+    "label": "Antioch Library · Dissertation HQ",
+    "url": "https://libguides.antioch.edu/dhq",
+    "approved": true,
+    "source": "Official Antioch website; selected for director-review demonstration. Publication approval still required.",
+    "usedBy": [
+      {
+        "section": "The Weeks Ahead",
+        "title": "Dissertation conversation: from question to design"
+      },
+      {
+        "section": "Dissertation Journey",
+        "title": "From a compelling concern to a researchable question"
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "cafe",
+    "label": "Community Co-working & Café · Zoom",
+    "url": "https://antioch.zoom.us/j/94176225683",
+    "approved": true,
+    "source": "Provided by user; registration not required",
+    "usedBy": [
+      {
+        "section": "Community Co-working & Café",
+        "title": "A little company. A little progress."
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "program",
+    "label": "EdD program overview",
+    "url": "https://www.antioch.edu/academics/education/edd-in-educational-professional-practice/",
+    "approved": true,
+    "source": "Official Antioch website; selected for director-review demonstration. Publication approval still required.",
+    "usedBy": [
+      {
+        "section": "EdD Program Update",
+        "title": "Inquiry into action"
+      },
+      {
+        "section": "Residency",
+        "title": "Arrive with a question. Leave with a connection."
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "writing",
+    "label": "Antioch writing support",
+    "url": "https://www.antioch.edu/departments/writing-centers/",
+    "approved": true,
+    "source": "Official Antioch website; selected for director-review demonstration. Publication approval still required.",
+    "usedBy": [
+      {
+        "section": "Resources & Support",
+        "title": "Make space for the next draft"
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "access",
+    "label": "Disability Support Services",
+    "url": "https://www.antioch.edu/resources/students/disability-services/",
+    "approved": true,
+    "source": "Official Antioch website; selected for director-review demonstration. Publication approval still required.",
+    "usedBy": [
+      {
+        "section": "Resources & Support",
+        "title": "Access belongs in the plan"
+      }
+    ],
+    "availability": "Not checked"
+  },
+  {
+    "id": "news",
+    "label": "Common Thread · University news",
+    "url": "https://commonthread.antioch.edu/",
+    "approved": true,
+    "source": "Official Antioch website; selected for director-review demonstration. Publication approval still required.",
+    "usedBy": [
+      {
+        "section": "Alumni Connection",
+        "title": "Carrying inquiry beyond the dissertation"
+      },
+      {
+        "section": "Research & Public Scholarship",
+        "title": "Scholarship that travels beyond the seminar"
+      },
+      {
+        "section": "Opportunities",
+        "title": "Find the conversation your work belongs in"
+      }
+    ],
+    "availability": "Not checked"
+  }
+]
