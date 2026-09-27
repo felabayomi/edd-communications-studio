@@ -1,6 +1,6 @@
 # EdD Communications Studio
 
-A working, local newsletter-production application. No dependencies need to be installed. No database, authentication, subscriber list, email delivery, university API, or live-site modification is included.
+A communications editor with browser autosave and optional online edition storage through Netlify Functions and Neon Postgres. See [Netlify and Neon setup](NETLIFY-NEON-SETUP.md) for migration, configuration, file changes, and verification. No authentication, subscriber list, email delivery, or university API is included.
 
 ## Run
 
@@ -49,7 +49,7 @@ Edition data is separate from presentation. Each card references a link ID. All 
 - Web export is a standalone document without scripts or external stylesheets. Hosted images still need internet access. Draft web exports can embed local images; draft email exports omit them.
 - Email uses conservative inline styling and presentation tables, including an Outlook conditional width wrapper. Real Gmail, Outlook, mobile-email and sending-platform rendering has not been tested. The browser's email preview is not an email-client emulator.
 - Colors and typography are a prototype identity, not verified Antioch brand standards. No unapproved logos or real people are included.
-- Local storage keeps one working edition per browser origin. Import/export JSON supports additional editions. There is no multi-user review, submission intake, or automatic publication.
+- Local storage keeps one working edition per browser origin. The online Editions library supports multiple saved editions. Import/export JSON remains available when online storage is unavailable. There is no multi-user review, submission intake, or automatic publication.
 - The optional read-only WebMCP readiness tool is feature-detected. Ordinary browser controls work without it.
 
 Run core checks with `npm test`.
@@ -85,7 +85,7 @@ The application now offers two publication types through **Create New → Progra
 
 Working storage uses `edd-communications-studio-v2`; the director mockup uses `edd-communications-director-review-v2`. The app checks these first, then falls back to the original `edd-newsletter-studio-v1` or `edd-newsletter-director-review-v1`. Original entries are never overwritten by the new app. Nothing is written merely by opening or closing an unchanged migrated edition. Edits and explicit creation/import save to the new key. Imported invalid data is rejected before replacing the working edition.
 
-Each browser origin still holds one working edition and one director mockup; export Content JSON to retain more editions. The original working project was backed up before edits in `../newsletter-studio-working-backup-2026-09-26.zip`.
+Each browser origin holds one working edition and one director mockup. The Editions library supports multiple online editions through explicit saves; Content JSON remains portable. The original working project was backed up before edits in `../newsletter-studio-working-backup-2026-09-26.zip`.
 
 ### Filenames
 
