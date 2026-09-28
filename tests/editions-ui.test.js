@@ -1,6 +1,15 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const S=require('../core'),P=require('../publications');
 const source=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+test('both publication types offer concise editorial status help without changing status',()=>{
+ for(const type of ['newsletter','program-letter']){
+  const ui=studio();ui.run(`edition=S.createPublication('${type}')`);
+  const before=ui.run('JSON.stringify(edition)'),html=ui.run('metadataEditor()');
+  for(const text of ['Work in progress. Not ready for review or distribution.','Prepared for reviewer feedback or approval. Not authorized for distribution.','Approved and authorized for distribution through the established department process.','Distribution has been completed. Retained as the publication record.'])assert(html.includes(text));
+  assert(html.includes('<details><summary>What does each editorial status mean?</summary>'));
+  assert.equal(ui.run('JSON.stringify(edition)'),before);
+ }
+});
 function studio({storage=new Map(),rows=new Map(),offline=false}={}){
  const calls=[],listeners={},elements=new Map();
  const api={

@@ -8,7 +8,7 @@ for(const type of ['newsletter','program-letter'])for(const status of ['Draft','
   assert.equal(page.includes('DRAFT PREVIEW · NOT FOR DISTRIBUTION'),status==='Draft');assert.equal(page.includes('READY FOR REVIEW · NOT APPROVED FOR DISTRIBUTION'),status==='Ready for Review');
   assert(!page.includes('HIDDEN_PREHEADER'));assert.match(page,/id="copy-gmail"/);assert.match(page,/id="select-publication"/);
   assert(page.includes(H.copyRendered.toString()));assert(page.includes(H.plainText.toString()));assert.equal(JSON.stringify(data),before);
-  assert.match(files['HANDOFF.txt'],/GMAIL DISTRIBUTION/);assert.match(files['HANDOFF.txt'],/Open OPEN-TO-COPY.html in Chrome or Edge/);assert.match(files['HANDOFF.txt'],/Send only if/);
+  assert.equal(files['HANDOFF.txt'].includes('GMAIL DISTRIBUTION'),status==='Approved');assert.match(files['HANDOFF.txt'],/[Oo]pen OPEN-TO-COPY.html in Chrome or Edge/);assert.match(files['HANDOFF.txt'],/FILES INCLUDED/);
  });
 }
 test('standalone file excludes private records, dependencies, APIs and storage; content cannot inject scripts',()=>{
