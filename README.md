@@ -2,6 +2,10 @@
 
 A communications editor with browser autosave and optional online edition storage through Netlify Functions and Neon Postgres. See [Netlify and Neon setup](NETLIFY-NEON-SETUP.md) for migration, configuration, file changes, and verification. No authentication, subscriber list, email delivery, or university API is included.
 
+See [Approved Destinations milestone](APPROVED-DESTINATIONS.md) for the registry, manual `002_destinations.sql` migration, optional card dates, and historical link behavior.
+
+See [Submission Forms and Private Handoff](SUBMISSION-FORMS-HANDOFF.md) for form metadata, optional destination reuse, portable review/distribution artifacts, and the manual 002 → 003 migration order.
+
 ## Run
 
 With Node.js installed, open a terminal in this folder and run:
@@ -42,7 +46,7 @@ Edition data is separate from presentation. Each card references a link ID. All 
 
 ## Validation and limitations
 
-- Checks detect missing edition fields, placeholder copy, empty cards, event dates, expired deadlines, incomplete buttons, pending/unapproved/unsafe destinations, image alt text, local-only images, and unconfirmed student/alumni approval. Expired deadlines are reminders; missing required content and approvals are blockers.
+- Checks detect missing edition fields, placeholder copy, empty cards, expired deadlines, incomplete buttons, pending/unapproved/unsafe destinations, image alt text, local-only images, and unconfirmed student/alumni approval. Expired deadlines are reminders; missing required content and approvals are blockers.
 - Link validation checks approval and HTTPS syntax only. It does **not** assert that links work or that images are publicly accessible. Use **Open to verify** and test images in the intended recipient context. The Community Center may require institutional sign-in.
 - Local PNG/JPEG/WebP/GIF uploads are limited to 2 MB each. Browser storage has a total quota; save failures are shown in the header. Download JSON before closing if saving fails. Remote HTTPS URLs are needed for final email export. A remote URL supersedes a local image in rendering.
 - HTML is escaped. Arbitrary rich HTML is not accepted. Multiple image cards can represent a gallery; there is no cropper, rich-text editor, or multi-column gallery control.

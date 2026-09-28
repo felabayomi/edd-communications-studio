@@ -12,7 +12,7 @@ function studio({storage=new Map(),rows=new Map(),offline=false}={}){
   async remove(id){calls.push('remove');rows.delete(id);}
  };
  const context=vm.createContext({console,URLSearchParams,location:{search:''},crypto:require('node:crypto').webcrypto,
-  setTimeout:()=>1,clearTimeout:()=>{},EditionStorage:{createClient:()=>api},
+  SubmissionForms:require('../submission-forms'),SubmissionFormsManager:require('../submission-forms-manager'),PrivateHandoff:require('../private-handoff'),Destinations:require('../destinations'),DestinationManager:require('../destinations-manager'),setTimeout:()=>1,clearTimeout:()=>{},EditionStorage:{createClient:()=>api},
   localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
   window:{Publications:P,Studio:S,fetch:()=>{},addEventListener:()=>{}},
   document:{addEventListener:(name,fn)=>listeners[name]=fn,querySelectorAll:()=>[],querySelector:selector=>{
@@ -23,7 +23,7 @@ function studio({storage=new Map(),rows=new Map(),offline=false}={}){
  vm.runInContext(source,context);vm.runInContext('confirmChange=async()=>true',context);
  const run=code=>vm.runInContext(code,context);
  const click=action=>listeners.click({target:{closest:()=>({dataset:{action}})}});
- return {run,click,calls,rows,storage,elements};
+ return {run,click,input:el=>listeners.input({target:el}),calls,rows,storage,elements};
 }
 test('UI never uploads initial browser content; explicit save updates/reopens and restores the link after reload',async()=>{
  const initial=S.createPublication('newsletter'),storage=new Map([['edd-communications-studio-v2',JSON.stringify(initial)]]);
@@ -50,4 +50,11 @@ test('UI failed save/open/list retains work and browser fallback, including exis
  const saved=JSON.parse(storage.get('edd-communications-studio-v2'));assert.deepEqual(saved.sections,initial.sections);assert.equal(saved.publicationType,'program-letter');
  const before=ui.run('JSON.stringify(edition)');await ui.run("onlineAction('online-open','missing')");await ui.click('online-refresh');
  assert.equal(ui.run('JSON.stringify(edition)'),before);assert.equal(ui.run('onlineRef'),null);assert.match(ui.run('onlineMessage'),/Offline/);
+});
+test('Submission Forms UI records one category per line without changing the edition',()=>{
+ const ui=studio(),before=ui.run('JSON.stringify(edition)');
+ ui.input({dataset:{},value:'Program update\nLibrary news\n',matches:selector=>selector==='[data-form-categories]'});
+ assert.equal(ui.run('forms.state.draft.content_categories.length'),2);
+ assert.equal(ui.run('forms.state.draft.content_categories[1]'),'Library news');
+ assert.equal(ui.run('JSON.stringify(edition)'),before);
 });

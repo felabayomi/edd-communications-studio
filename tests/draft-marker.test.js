@@ -33,10 +33,11 @@ for(const type of ['newsletter','program-letter']){
    check(S.render(data,{email:true,draft:true}));
   });
  }
- test(`${type}: Ready for Review retains the existing preview-flag behavior`,()=>{
+ test(`${type}: Ready for Review is distinct from Approved in every rendered path`,()=>{
   const data=S.createPublication(type);data.publication.status='Ready for Review';
   for(const email of [false,true])for(const draft of [false,true]){
-   assert.equal(S.render(data,{email,draft}).includes(marker),draft);
+   assert.equal(S.render(data,{email,draft}).includes(marker),false);
+   assert.match(S.render(data,{email,draft}),/READY FOR REVIEW · NOT APPROVED FOR DISTRIBUTION/);
   }
  });
 }

@@ -43,7 +43,7 @@ for(const c of cards){const name=c.title||'Untitled card',prefix=`${s.title} · 
 if(!c.title.trim())add('error',`${s.title}: a card needs a title.`,'',s.id);
 if(![c.body,c.quote,c.imageUrl,c.localImage].some(v=>v.trim()))add('error',`${prefix}: content is missing.`,'Add a body, quotation, or image.',s.id);
 if(['title','body','author','label','quote','imageAlt','buttonLabel'].some(k=>placeholder(c[k])))add('error',`${prefix}: placeholder text remains.`,'Replace demonstration copy.',s.id);
-if(c.type==='event'&&!c.date)add('error',`${prefix}: event date is missing.`,'',s.id);
+
 if(c.deadline&&c.deadline<today)add('warning',`${prefix}: deadline has passed.`,'Review or disable this opportunity.',s.id);
 if(P.requiresApproval(s,c)&&!c.approved)add('error',`${prefix}: publication approval is not confirmed.`,'Confirm approval after reviewing the story and any image or quotation.',s.id);
 if((c.buttonLabel||c.destination)&&(!c.buttonLabel.trim()||!c.destination))add('error',`${prefix}: CTA needs a label and destination.`,'Select a library destination and enter meaningful button text.',s.id);
@@ -67,7 +67,7 @@ return `${src?`<img src="${escape(src)}" alt="${escape(c.imageAlt)}" width="584"
 function render(data,{email=false,draft=false}={}){const issue=data.issue,title=`${issue.programName} · ${issue.period} ${issue.year}`,head=`<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title>`;
 const reviewNote=issue.reviewNotice?`<div style="padding:12px 20px;text-align:center;background:#e7f2ee;color:#083133;font:700 12px/1.5 Arial,sans-serif">${escape(issue.reviewNotice)}</div>`:'';
 const status=data.publication?.status,showDraft=status==='Draft'||(!['Approved','Distributed'].includes(status)&&draft);
-const draftNote=showDraft?`<div style="padding:12px 20px;text-align:center;background:#fff0d3;color:#734900;font:700 12px/1.5 Arial,sans-serif">DRAFT PREVIEW · NOT FOR DISTRIBUTION</div>`:'';
+const draftNote=status==='Ready for Review'?`<div style="padding:12px 20px;text-align:center;background:#fff0d3;color:#734900;font:700 12px/1.5 Arial,sans-serif">READY FOR REVIEW · NOT APPROVED FOR DISTRIBUTION</div>`:showDraft?`<div style="padding:12px 20px;text-align:center;background:#fff0d3;color:#734900;font:700 12px/1.5 Arial,sans-serif">DRAFT PREVIEW · NOT FOR DISTRIBUTION</div>`:'';
 const identity=`${data.publicationType==='program-letter'?'<p style="margin:0 0 18px;font:700 12px/1.5 Arial,sans-serif;letter-spacing:2px">EDD PROGRAM LETTER</p>':''}${issue.logoUrl&&https(issue.logoUrl)?`<img src="${escape(issue.logoUrl)}" alt="${escape(issue.logoAlt||issue.institutionName)}" width="230" style="display:block;width:230px;max-width:100%;height:auto;margin:0 0 32px;border:0">`:''}<p style="margin:0 0 26px;font:700 12px/1.5 Arial,sans-serif;letter-spacing:2px;text-transform:uppercase">${escape(issue.institutionName)}</p><h1 style="font:normal 46px/1.05 Georgia,serif;margin:0 0 14px">${escape(issue.programName)}</h1><p style="margin:0;font:16px/1.6 Arial,sans-serif">${escape(issue.degreeName)}</p><p style="margin:30px 0 0;font:700 12px/1.6 Arial,sans-serif;letter-spacing:1px;text-transform:uppercase">${escape(issue.period)} ${escape(issue.year)} &nbsp; / &nbsp; ${escape(issue.issueDate)}</p>`;
 const footer=`<p style="font:700 14px/1.5 Arial,sans-serif;margin:0 0 10px">${escape(issue.programName)} · ${escape(issue.institutionName)}</p>${paragraphs(issue.footerNote)}`;
 const sections=activeSections(data);
