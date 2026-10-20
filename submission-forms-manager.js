@@ -4,12 +4,13 @@ const F=typeof module!=='undefined'&&module.exports?require('./submission-forms'
 const D=typeof module!=='undefined'&&module.exports?require('./destinations'):root.Destinations;
 const S=typeof module!=='undefined'&&module.exports?require('./core'):root.Studio;
 function createManager({api,getEdition,confirmChange,onChange=()=>{},onSaved=()=>{},toast=()=>{},newId=()=>crypto.randomUUID()}){
+ let pendingId=null;
  const state={rows:[],loaded:false,busy:false,message:'Refresh to load institutional form records.',editing:null,draft:F.empty()};
  async function refresh(){try{state.rows=await api.list();state.loaded=true;state.message='Form records loaded. This manager stores links and descriptions, not submissions.';}catch(error){state.message=error.message;}onChange();}
  async function action(action,id){
   if(state.busy)return;
-  if(action==='form-new'){state.editing=null;state.draft=F.empty();onChange();return;}
-  if(action==='form-edit'){const row=state.rows.find(r=>r.id===id);if(!row)return;state.editing={id:row.id,version:row.version};state.draft=JSON.parse(JSON.stringify(row));onChange();return;}
+  if(action==='form-new'){pendingId=null;state.editing=null;state.draft=F.empty();onChange();return;}
+  if(action==='form-edit'){const row=state.rows.find(r=>r.id===id);if(!row)return;pendingId=null;state.editing={id:row.id,version:row.version};state.draft=JSON.parse(JSON.stringify(row));onChange();return;}
   state.busy=true;
   try{
    if(action==='form-refresh'){await refresh();return;}
@@ -17,7 +18,7 @@ function createManager({api,getEdition,confirmChange,onChange=()=>{},onSaved=()=
    const row=state.rows.find(r=>r.id===id);
    if(action==='form-save'){
     const data=F.validate(state.draft),ref=state.editing;
-    const saved=await api.save(ref?.id||newId(),data,ref?.version??null);
+    const saved=await api.save(ref?.id||(pendingId??=newId()),data,ref?.version??null);
     state.rows=[saved,...state.rows.filter(r=>r.id!==saved.id)];state.editing={id:saved.id,version:saved.version};state.draft=JSON.parse(JSON.stringify(saved));
     state.message='Form saved. Existing publication snapshots are unchanged.';await onSaved();
    }

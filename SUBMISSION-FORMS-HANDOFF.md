@@ -1,5 +1,51 @@
 # Submission Forms & Private Handoff milestone
 
+## Submission Forms save repair
+
+### Diagnosis and request trace
+
+Draft validation and migration 003 already permit an empty URL with `active: false` and `expose_as_destination: false`. `publication_targets: ["Program Letter"]` is valid on its own. The Google integration notice is informational; no Google service is contacted.
+
+Saving creates a JSON `POST /.netlify/functions/submission-forms` with `{id, form, version: null}`. `form` contains `name`, `url`, `description`, `audience`, `form_type`, `active`, `notes`, `publication_targets`, `content_categories`, and `expose_as_destination`. Updating uses `PUT /.netlify/functions/submission-forms?id=<saved UUID>` and the saved integer `version`. Loading uses `GET` on the same function. Creation returns 201, updates/loads 200, validation errors 400, and conflicting versions or different metadata at an existing ID 409.
+
+Previously, `netlify/functions/submission-forms.js` converted **every non-validation exception** into the same 503 “Submission Forms unavailable” message. `submission-forms.js` also used that message for network failures and JSON parsing failures, including HTML 404/access-denied responses. Neither path identified the failed dependency. The function did not log diagnostics.
+
+The earlier milestone below records that migration 003 had **not been applied**. Automated reproduction confirms that an absent `submission_forms` table produces PostgreSQL `42P01`, preventing both listing and saving; applying the existing 003 migration restores draft CRUD without modifying editions. The static `npm start` server also has no function route and returns 404 for API calls. The checked-in Netlify function and functions directory configuration are present and consistent; no redirect or new migration is needed. Production Netlify deployment state, function logs, environment values, and Neon schema were **not accessible or verified in this repair**, so the actual production cause must be confirmed using the diagnostics below rather than assumed.
+
+### Repair and diagnostics
+
+- The function distinguishes missing configuration (`DATABASE_NOT_CONFIGURED`), incomplete schema (`SCHEMA_NOT_READY`), database role permissions (`DATABASE_PERMISSION_DENIED`), connection failures (`DATABASE_UNAVAILABLE`), and unexpected server failures (`SERVER_ERROR`). Validation messages still identify invalid fields.
+- Netlify Function logs contain the operation, a safe diagnostic category, and PostgreSQL SQLSTATE when available. They deliberately exclude exception messages, stack traces, SQL, request bodies, notes, and connection strings.
+- The browser separately identifies 401/403 access denial, 404/405 missing function routing, malformed responses, and network/timeout failures. Failed saves retain unsaved form input and never modify the current edition. Keep the tab open until the problem is resolved; unsaved form metadata is not persisted across a browser reload.
+- A new draft keeps the same UUID across failed save retries. Replaying the same create request returns the existing identical record without inserting a duplicate or incrementing its version. Changed metadata with that UUID returns a conflict; refresh and open the saved record before editing it. Concurrent Save clicks are ignored while a save is in flight.
+- URL security rules, inactive visibility, destination opt-in, version checks, migration contents, and Google integration notice are unchanged. No Google API, OAuth, import, or new dependency was added.
+
+### Required deployment and access checks
+
+1. **Protect both the Studio and its `/.netlify/functions/*` endpoints with the existing deployment-level administrator-only access restriction.** There is no application login or administrator-role system in this repository. Same-origin validation is not authentication. Do not deploy privately intended metadata to an unrestricted site. With an unauthenticated browser and a direct HTTP client, verify reads and writes cannot reach the function; a protected page alone is insufficient. If your hosting access gate does not cover Functions or cannot restrict access to administrators, an authentication project is required before private use.
+2. In Netlify, confirm Base directory points to this repository, build command is `npm run build`, publish directory is `dist`, and Functions directory is `netlify/functions`. Deploy this revision and verify the `submission-forms` function appears in the deployment. For local API work use Netlify Dev; `npm start` is static-only.
+3. Confirm server-only `DATABASE_URL` is set for **Functions** in the intended deploy context and points to the intended Neon branch/database. Never copy it into browser code or logs. Redeploy after changing environment settings.
+4. In the matching Neon SQL Editor, confirm `SELECT current_database();` identifies the intended Studio database. Review existing tables/migration history. Apply only outstanding migrations in order: `db/001_editions.sql`, `db/002_destinations.sql`, then `db/003_submission_forms.sql`. Do not reset/drop/truncate existing tables. There is no automatic startup migration. Existing migration 003 is additive and its seeds do not overwrite edited rows; rerunning can recreate a deliberately deleted seed, so apply only if outstanding.
+5. Open Submission Forms → Refresh forms. If it fails, inspect the browser Network request's status and safe JSON `code`, then the Netlify `submission-forms` function log at the same time. A 404/HTML response suggests routing or an access gate; 401/403 requires administrator access; 503 plus `SCHEMA_NOT_READY` requires the outstanding migrations; `DATABASE_NOT_CONFIGURED` requires the Functions environment setting; `DATABASE_UNAVAILABLE` requires checking Neon connectivity/availability; `DATABASE_PERMISSION_DENIED` requires checking the configured database role. Do not disable access protection to troubleshoot.
+
+No production deployment or database migration was performed by this repair. No new environment variable is required. Administrator-only access is an existing deployment prerequisite, not something these function changes implement. Automated tests cover untrusted-origin rejection and handling upstream 401/403 responses, **not** the live hosting access gate.
+
+### Exact draft verification
+
+1. Sign in through the administrator-only protected Studio deployment. Open an existing Program Letter edition and note its title, status, content cards, and online version.
+2. Open **Submission Forms → Refresh forms → New form** (the editor is headed **Create a form record**).
+3. Enter the EdD Program Letter form name, description, audience, type, categories, and internal notes. Select **Program Letter** only. Leave **Active** and **Also offer as an Approved Destination** unchecked and the institutional URL blank.
+4. Click **Save form**. Expect “Form saved” and a `POST` response of 201. Repeated clicks must not add another record. Confirm the form is inactive and absent from new publication destination choices.
+5. Reload the page, reopen Submission Forms, refresh, and select **Edit form** on the saved record. Confirm all metadata persists. Change its notes, save, reload, and confirm the change.
+6. Activate without a URL and expect the field-specific HTTPS validation message. Enter the real university-owned Google Form's HTTPS URL (not a fabricated URL), save, activate, then deactivate. Keep destination exposure unchecked and confirm Approved Destinations is unchanged. URL validation cannot establish university ownership; verify ownership institutionally.
+7. Return to the Program Letter and confirm its title, status, cards, preview, and online version are unchanged. Repeat the access-denial check from step 1 of deployment checks in an unauthenticated session.
+
+Regression tests use disposable in-memory PostgreSQL-compatible storage and cover the full manager/client/function/store draft flow, a newly loaded manager, editing, activation/deactivation, missing schema recovery, safe diagnostics, lost-response retries, denied origins/upstream access responses, unchanged editions/destinations, and retained unsaved input. Live Neon, Netlify deployment, and administrator access checks remain manual.
+
+Repair verification: `npm test` passed **113 tests**, including 15 Submission Forms tests; `npm run build` and `git diff --check` passed. No dedicated lint command is configured. Installing the existing lockfile reported four moderate development-dependency advisories; this repair does not change dependencies.
+
+## Historical milestone handoff
+
 Local implementation only. Nothing was committed, pushed, deployed, or migrated in Neon. SQL verification used disposable, in-memory test databases only; no persistent database was changed.
 
 ## Implemented workflow
