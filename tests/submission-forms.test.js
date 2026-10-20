@@ -173,3 +173,27 @@ test('database failures preserve the full unsaved draft and current edition thro
  await manager.action('form-save');
  assert.match(manager.state.message,/could not connect to storage/);assert.equal(JSON.stringify(manager.state.draft),beforeDraft);assert.equal(JSON.stringify(edition),beforeEdition);assert.equal(logs[0].databaseCode,'08006');
 });
+test('initial backend failure disables Save, preserves input and allows refresh then a real draft save',async()=>{
+ let offline=true,saves=0,release;
+ const edition=S.createPublication('program-letter'),beforeEdition=JSON.stringify(edition);
+ const manager=M.createManager({
+  api:{list:async()=>{if(offline)throw new Error('Preview storage is not configured.');return forms.list();},save:async(...args)=>{saves++;await new Promise(resolve=>{release=resolve;});return forms.save(...args);}},
+  getEdition:()=>edition,confirmChange:async()=>true,newId:randomUUID
+ });
+ const saveButton=()=>manager.view().match(/<button\b[^>]*data-action="form-save"[^>]*>/)[0];
+ const retryButton=()=>manager.view().match(/<button\b[^>]*data-action="form-refresh"[^>]*>/)[0];
+ assert.match(saveButton(),/\bdisabled\b/);
+ manager.state.draft={...F.empty(),name:'EdD Program Letter',publication_targets:['Program Letter'],notes:'Keep this input'};
+ const beforeDraft=JSON.stringify(manager.state.draft);
+ await manager.refresh();
+ assert.equal(manager.state.loaded,false);assert.match(saveButton(),/\bdisabled\b/);
+ assert.match(manager.view(),/Save is disabled because the forms list could not load/);assert.match(manager.view(),/Refresh forms to retry/);assert(!retryButton().includes('disabled'));
+ await manager.action('form-save');assert.equal(saves,0);
+ await manager.action('form-refresh');assert.equal(manager.state.loaded,false);assert.equal(JSON.stringify(manager.state.draft),beforeDraft);assert(!manager.state.message.includes('Form saved.'));
+ offline=false;await manager.action('form-refresh');
+ assert.equal(manager.state.loaded,true);assert(!saveButton().includes('disabled'));assert.equal(JSON.stringify(manager.state.draft),beforeDraft);
+ assert(!manager.view().includes('Save is disabled because'));
+ const saving=manager.action('form-save');assert.equal(saves,1);assert.match(saveButton(),/\bdisabled\b/);release();await saving;
+ assert(!saveButton().includes('disabled'));assert(manager.state.editing);assert.equal(manager.state.draft.url,'');assert.equal(manager.state.draft.active,false);assert.equal(manager.state.draft.expose_as_destination,false);
+ assert.equal(JSON.stringify(edition),beforeEdition);
+});

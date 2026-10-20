@@ -91,7 +91,15 @@ test('function API CRUD works through real SQL; rejects invalid inputs and redac
  assert.equal((await handler({...event('POST'),body:'bad'})).statusCode,400);
  assert.equal((await handler({...event('POST'),headers:{'content-type':'application/json',origin:'https://other.example'}})).statusCode,403);
  const failure=await createHandler(()=>{throw new Error('postgresql://hidden-secret');})(event('GET'));
- assert.equal(failure.statusCode,503);assert(!failure.body.includes('hidden-secret'));assert.equal(failure.headers['Cache-Control'],'no-store');
+ assert.equal(failure.statusCode,500);assert(!failure.body.includes('hidden-secret'));assert.equal(failure.headers['Cache-Control'],'no-store');
+});
+test('missing destinations migration reports a safe schema diagnostic and recovers after migration 002',async()=>{
+ const handler=createHandler(()=>store,{log:()=>{}});
+ await db.exec('DROP TABLE destinations;');
+ const failure=await handler(event('GET'));assert.equal(failure.statusCode,503);
+ const body=JSON.parse(failure.body);assert.equal(body.code,'SCHEMA_NOT_READY');assert.match(body.error,/002_destinations.sql/);assert(!failure.body.includes('SELECT'));
+ await db.exec(migration);
+ const recovered=await handler(event('GET'));assert.equal(recovered.statusCode,200);assert.equal(JSON.parse(recovered.body).destinations.length,7);
 });
 test('manager preserves work, form drafts on failure, confirms deletion, and suggests deactivation for current references',async()=>{
  const data=S.createPublication('program-letter');let confirmed=false,deleted=false,fail=false;

@@ -5,8 +5,8 @@ const D=typeof module!=='undefined'&&module.exports?require('./destinations'):ro
 const S=typeof module!=='undefined'&&module.exports?require('./core'):root.Studio;
 function createManager({api,getEdition,confirmChange,onChange=()=>{},onSaved=()=>{},toast=()=>{},newId=()=>crypto.randomUUID()}){
  let pendingId=null;
- const state={rows:[],loaded:false,busy:false,message:'Refresh to load institutional form records.',editing:null,draft:F.empty()};
- async function refresh(){try{state.rows=await api.list();state.loaded=true;state.message='Form records loaded. This manager stores links and descriptions, not submissions.';}catch(error){state.message=error.message;}onChange();}
+ const state={rows:[],loaded:false,busy:false,message:'Refresh to load institutional form records. Save is disabled until the forms list loads successfully.',editing:null,draft:F.empty()};
+ async function refresh(){try{state.rows=await api.list();state.loaded=true;state.message='Form records loaded. This manager stores links and descriptions, not submissions.';}catch(error){state.message=error.message+(!state.loaded?' Save is disabled because the forms list could not load, not because of your draft fields. Keep this tab open and choose Refresh forms to retry after storage is restored.':'');}onChange();}
  async function action(action,id){
   if(state.busy)return;
   if(action==='form-new'){pendingId=null;state.editing=null;state.draft=F.empty();onChange();return;}
