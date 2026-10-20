@@ -27,9 +27,14 @@ function validate(input){
 }
 function createClient(fetcher){
  async function request(method,id,data){
-  let res,body;try{res=await fetcher('/.netlify/functions/submission-forms'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(20000)});body=await res.json();}
-  catch{throw new Error('Submission Forms unavailable. Your form draft and edition are unchanged.');}
-  if(!res.ok)throw new Error(body.error||'Form request failed.');return body;
+  let res,body;try{res=await fetcher('/.netlify/functions/submission-forms'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(20000)});}
+  catch{throw new Error('Submission Forms could not be reached or the request timed out. Your form input is retained. Refresh the forms list before retrying; a save may already have completed.');}
+  if(res.status===401||res.status===403)throw new Error('Administrator access is required for Submission Forms. Sign in through the protected Studio site, then retry. Your form input is retained.');
+  if(res.status===404||res.status===405)throw new Error('The Submission Forms endpoint is not available. Ask the administrator to deploy the submission-forms Netlify Function. npm start serves only the editor; use Netlify Dev for database operations.');
+  try{body=await res.json();}catch{throw new Error('Submission Forms returned an unexpected response. Ask the administrator to check the Netlify deployment and access protection. Your form input is retained.');}
+  if(!res.ok)throw new Error(typeof body?.error==='string'?body.error:'Submission Forms could not complete the request. Your form input is retained.');
+  if(!body||typeof body!=='object'||(method==='GET'&&!Array.isArray(body.forms))||(['POST','PUT'].includes(method)&&(!body.form||typeof body.form.id!=='string')))throw new Error('Submission Forms returned an unexpected response. Your form input is retained. Refresh the forms list before retrying.');
+  return body;
  }
  return {list:async()=>(await request('GET')).forms,save:async(id,form,version=null)=>(await request(version===null?'POST':'PUT',version===null?null:id,{id,form,version})).form,remove:(id,version)=>request('DELETE',id,{version})};
 }

@@ -1,9 +1,10 @@
 'use strict';
 const {createStore}=require('../../server/submission-forms-store');
 const {validateId,validateVersion}=require('../../server/editions-store');
+const {createRuntimeStore,storageFailure,logStorageFailure}=require('../../server/storage');
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(statusCode,data)=>({statusCode,headers,body:JSON.stringify(data)});
-function createHandler(getStore){return async event=>{
+function createHandler(getStore,{log=entry=>console.error(JSON.stringify(entry))}={}){return async event=>{
  try{
   const method=event.httpMethod,id=event.queryStringParameters?.id;
   if(!['GET','POST','PUT','DELETE'].includes(method))return {...reply(405,{error:'Method not allowed.'}),headers:{...headers,Allow:'GET, POST, PUT, DELETE'}};
@@ -24,10 +25,12 @@ function createHandler(getStore){return async event=>{
   const result=method==='PUT'?await getStore().save(id,input.form,input.version):await getStore().remove(id,input.version);
   if(!result)return reply(409,{error:method==='DELETE'?'Form is referenced by a saved edition, changed, or was deleted. Deactivate it instead, or refresh and review.':'Form changed or was deleted. Refresh and reopen it before saving.'});
   return reply(200,method==='PUT'?{form:result}:{deleted:true});
- }catch(error){return reply(error.status===400?400:503,{error:error.status===400?error.message:'Submission Forms unavailable. Your form draft and edition are unchanged.'});}
+ }catch(error){
+  if(error.status===400)return reply(400,{error:error.message});
+  const [status,code,message]=storageFailure(error,'Submission Forms','003_submission_forms.sql');
+  logStorageFailure(log,event,'submission-forms',error,code);
+  return reply(status,{error:message,code});
+ }
 };}
 exports.createHandler=createHandler;
-exports.handler=createHandler(()=>{
- const connection=process.env.DATABASE_URL;if(!connection)throw new Error('Storage not configured');
- const {neon}=require('@neondatabase/serverless');return createStore(neon(connection));
-});
+exports.handler=createHandler(createRuntimeStore(createStore));

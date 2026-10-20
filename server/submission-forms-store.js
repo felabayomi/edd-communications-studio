@@ -7,7 +7,12 @@ function createStore(sql){
   async save(id,input,version){
    validateId(id);let f;try{f=F.validate(input);}catch(error){throw Object.assign(error,{status:400});}
    const args=[id,f.name,f.url,f.description,f.audience,f.form_type,f.active,f.notes,JSON.stringify(f.publication_targets),JSON.stringify(f.content_categories),f.expose_as_destination];
-   if(version===null)return (await query(`INSERT INTO submission_forms (id,name,url,description,audience,form_type,active,notes,publication_targets,content_categories,expose_as_destination) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11) ON CONFLICT (id) DO NOTHING RETURNING *`,args))[0];
+   if(version===null){
+    const created=(await query(`INSERT INTO submission_forms (id,name,url,description,audience,form_type,active,notes,publication_targets,content_categories,expose_as_destination) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11) ON CONFLICT (id) DO NOTHING RETURNING *`,args))[0];
+    if(created)return created;
+    const existing=(await query('SELECT * FROM submission_forms WHERE id=$1',[id]))[0];
+    return existing&&JSON.stringify(F.validate(existing))===JSON.stringify(f)?existing:undefined;
+   }
    validateVersion(version);return (await query(`UPDATE submission_forms SET name=$2,url=$3,description=$4,audience=$5,form_type=$6,active=$7,notes=$8,publication_targets=$9::jsonb,content_categories=$10::jsonb,expose_as_destination=$11,version=version+1,updated_at=clock_timestamp() WHERE id=$1 AND version=$12 RETURNING *`,[...args,version]))[0];
   },
   async remove(id,version){
