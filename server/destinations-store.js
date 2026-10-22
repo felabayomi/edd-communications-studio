@@ -25,7 +25,10 @@ function createStore(sql){
     CROSS JOIN LATERAL jsonb_array_elements(e.content->'links') l
     CROSS JOIN LATERAL jsonb_array_elements(e.content->'sections') s
     CROSS JOIN LATERAL jsonb_array_elements(s->'cards') c
-    WHERE c->>'destination'=l->>'id'
+    WHERE (c->>'destination'=l->>'id' OR EXISTS (
+      SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(c->'bodyLinks')='array' THEN c->'bodyLinks' ELSE '[]'::jsonb END) b
+      WHERE b->>'destination'=l->>'id'
+    ))
       AND (l->>'registryId'=d.id::text OR l->>'id'=d.legacy_id OR l->>'url'=d.url)
    ) RETURNING d.id`,[id,version]))[0];
   }
