@@ -42,7 +42,7 @@ The ZIP contains `output/<edition>/edd-newsletter-<edition>.html`, the separate 
 - `tests/core.test.js`: content gating, safe rendering, approval, assets, ordering, JSON and ZIP checks.
 - `package.json`: `npm start` and `npm test`; no package installation required.
 
-Edition data is separate from presentation. Each card references a link ID. All newsletter colors are centralized in `core.js` → `tokens`; Studio colors are CSS variables. The two known URLs are user-supplied Community Center and Café destinations; all other library entries are pending. No additional Antioch links are invented.
+Edition data is separate from presentation. Each card references a link ID. All newsletter colors are centralized in `core.js` → `tokens`; Program Letters use a magazine layout rendered by `renderLetter` in `core.js`; each module's background and accent are set in `letterPalette` (other tones are mixed from that pair, and custom modules fall back to ivory/teal). Card text always sits on white or pale-ivory reading surfaces in dark ink; email and standalone HTML share its table-based compositions, and columns stack on phones; Studio colors are CSS variables. The two known URLs are user-supplied Community Center and Café destinations; all other library entries are pending. No additional Antioch links are invented.
 
 ## Validation and limitations
 
