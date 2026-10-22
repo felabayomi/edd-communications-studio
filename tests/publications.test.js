@@ -90,6 +90,14 @@ test('approved web magazine output stays byte-for-byte unchanged for six section
  assert.equal(hash(S.render(d)),'f3ab0150e71a067de68fef295f8368baa3f9732ee20b8fe9d93406126bffaeb8');
  const before=JSON.stringify(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email);
  assert.equal((fragment.match(/class="letter-email-pair"/g)||[]).length,3);
+ const headings=[...fragment.matchAll(/<h3 style="([^"]*)">([^<]*)<\/h3>/g)];
+ for(const s of d.sections)for(const [i,c] of s.cards.entries()){
+  const style=headings.find(([, ,title])=>title===S.escape(c.title))[1];
+  const paired=['events','resources','dissertation'].includes(s.id)&&i<2;
+  assert(style.includes(paired?'font:bold 20px/1.3 ':'font:bold 24px/1.25 '));
+ }
+ assert.equal((fragment.match(/font:bold 20px\/1.3 /g)||[]).length,6);
+ assert.doesNotMatch(S.render(d),/20px\/1.3/);
  assert.equal((fragment.match(/<h3 /g)||[]).length,11);
  assert.equal((fragment.match(/<h2 /g)||[]).length,6);
  assert.match(fragment,/src="https:\/\/example.org\/guide.png" alt="Guide checklist" width="480"/);
