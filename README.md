@@ -35,6 +35,8 @@ The ZIP contains `output/<edition>/edd-newsletter-<edition>.html`, the separate 
 
 **Insert/Edit Link** appears immediately below each card's **Body** text box.
 
+Open an edition, choose **01 Edition editor**, select a publication module in the left sidebar (for example, **Faculty/Staff Spotlight**), and scroll **inside the middle content editor** to the card's Body. The button is directly below Body and above Author, not in Edition details, Approved Destinations, the publication preview, or exported HTML. An empty module needs a content card first. Both Newsletter and Program Letter use this same editor; no sign-in or feature flag is required to see the button.
+
 1. Create and approve the HTTPS destination in **Approved Destinations**, or expose an existing **Submission Form** as a destination. No arbitrary URL field is offered in the link picker.
 2. Highlight a phrase in the card's Body, then choose **Insert/Edit Link**.
 3. Search by destination name or category, select the clearly named destination, and choose **Apply link**. Check the clickable, underlined text in the Web or Email preview.
@@ -45,6 +47,18 @@ For the Spotlight card, leave the existing Common Thread button destination unto
 Editorial links follow the destination's current approved HTTPS URL when the library loads or is refreshed (including when opening the picker). Card-level button destinations retain their existing saved snapshots. Inactive destinations cannot be selected for new links; existing links retain their valid approved URL. A missing destination blocks final export and renders as plain text. Offline work retains the last saved URL; refresh **Approved Destinations** before distribution to check for changes. Already exported files or pasted emails cannot update themselves.
 
 The body remains plain text with additive `bodyLinks` destination references and character ranges in Content JSON. Browser autosave, online editions, and JSON backups retain these references without rewriting old cards or images. Editing body text rebases link ranges; deleting linked text or inserting blank lines can remove its link, so review links after major text edits. Web, email HTML, ZIP handoffs, and **Copy for Gmail** share the safe renderer and inline link styling.
+
+### Verify the published Studio build
+
+Netlify runs `npm run build` and publishes **dist**, not the repository root or `sample`. Production and Deploy Previews use the same build command and editor. The build copies the browser code without rewriting edition data and adds content-derived `?v=` versions to every script and stylesheet, including the bundled Identity client. Shell, script, and stylesheet responses must revalidate; hosted email-image and function cache policies are unchanged. This repository does not register a service worker.
+
+1. Open `/build-info.json` on the production or Deploy Preview origin. `commit` is Netlify's full `COMMIT_REF` (or `null` outside Netlify); compare it with the commit shown in that deployment's Netlify log. `build` identifies the complete versioned shell, and `assets` records SHA-256 hashes of the built scripts and stylesheet.
+2. In DevTools → Network, reload and check the **actual responses**, not only the Netlify success badge: the page source's `studio-build` meta value must match `build-info.json`; its `app.js?v=…` request must match `assets["app.js"]`. Search the returned script for `Insert/Edit Link`. Check Console for failed scripts or initialization errors.
+3. Compare these values and the returned files between production and the working Deploy Preview. Identical source/build inputs produce identical build and asset hashes; commit IDs can differ for a merge with identical content. A different commit identifies a deployment mismatch; mismatched response bytes identify an asset-delivery problem. A button absent from Edition details or the preview alone is expected, not evidence of a stale build.
+4. In **01 Edition editor**, open an existing module/card and verify the button below Body. Highlight text → **Insert/Edit Link** → search **Approved Destinations** → choose a destination → **Apply link**. If the button appears but destinations do not load, inspect the destinations function request separately; loading the registry does not control button visibility.
+5. Back up **Content JSON** before testing edits. Do not clear site data/local storage to refresh code: it contains browser-only work. Test edits on a duplicate or isolated preview, reload to verify autosave, inspect Web and Email previews, test Copy for Gmail, and open `OPEN-TO-COPY.html` from a draft ZIP. Deploy Previews have separate browser storage; do not overwrite production editions to populate a preview.
+
+Asset versioning prevents reuse of an old browser asset URL after a new shell loads; it does not prove caching caused a particular incident or override a Netlify publish-directory setting changed in the dashboard. Confirm the deployed responses and resolved publish directory in Netlify before declaring a production issue fixed. Opening a draft PR requests a Deploy Preview through the existing Netlify integration; it does not authorize a merge or production deploy.
 
 ## Architecture and files
 
