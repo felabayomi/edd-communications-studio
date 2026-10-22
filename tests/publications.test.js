@@ -62,12 +62,12 @@ test('Program Letter uses wide responsive web compositions and an inline single-
  const card=(title,extra={})=>({...S.newCard('event'),title,body:'A short independent update.',date:'2026-11-03',...extra});
  s.cards=[card('First event'),card('Second event'),card('Long-form event',{body:'Detailed information. '.repeat(80)}),card('Third event'),card('Fourth event')];
  const web=S.render(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email);
- assert.match(web,/max-width:940px/);assert.match(web,/@media\(min-width:800px\)/);assert.match(web,/@media\(min-width:900px\)/);
+ assert.match(web,/width:calc\(100% - 48px\);max-width:1160px/);assert.match(web,/@media\(min-width:900px\)/);assert.match(web,/@media\(min-width:1100px\)/);
  assert.match(web,/grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
  assert.match(web,/\.l-pair,\.l-image-layout\{display:block\}/);
- assert.match(web,/\.l-section\{padding:12px 16px\}/);assert.match(web,/min-width:0/);assert.match(web,/overflow-wrap:anywhere/);
+ assert.match(web,/\.l-section\{padding:10px 16px\}/);assert.match(web,/min-width:0/);assert.match(web,/overflow-wrap:anywhere/);
  assert.equal((web.match(/<div class="l-pair">/g)||[]).length,2);
- assert.match(web,/<article class="l-card l-longform">/);
+ assert.doesNotMatch(web,/l-longform/);
  assert.match(email,/max-width:680px;table-layout:fixed/);assert.match(email,/\[if mso\]><table role="presentation" width="680"/);
  assert.doesNotMatch(fragment,/display:grid|display:flex|@media|l-pair|l-image-layout|width="(?:40%|48%|60%)"/);
  assert.doesNotMatch(email,/<style/);
@@ -78,13 +78,20 @@ test('Program Letter uses wide responsive web compositions and an inline single-
  }
 });
 
-test('web columns require adjacent short independent cards, never long titles, quotes, images or chair/closing sections',()=>{
- for(const extra of [{title:'Long heading '.repeat(10)},{body:'Long text '.repeat(60)},{author:'Author '.repeat(20)},{quote:'Keep full width'},{imageUrl:'https://example.org/image.png',imageAlt:'Image'},{localImage:'data:image/png;base64,AAAA'},{type:'leadership'},{buttonLabel:'Long link '.repeat(20)},{label:'Long metadata '.repeat(20)}]){
+test('web supporting sections pair substantial entries without changing order or pairing images, quotes or leadership cards',()=>{
+ for(const extra of [{title:'Long heading '.repeat(10)},{body:'Long text '.repeat(60)},{author:'Author '.repeat(20)},{buttonLabel:'Long link '.repeat(20)},{label:'Long metadata '.repeat(20)}]){
+  const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='resources');
+  s.cards=[{...S.newCard('resource'),title:'First',body:'Short',...extra},{...S.newCard('resource'),title:'Second',body:'Short'}];
+  const web=S.render(d);
+  assert.equal((web.match(/<div class="l-pair">/g)||[]).length,1);
+  assert(web.indexOf(S.escape(s.cards[0].title))<web.indexOf('Second'));
+ }
+ for(const extra of [{quote:'Keep full width'},{imageUrl:'https://example.org/image.png',imageAlt:'Image'},{localImage:'data:image/png;base64,AAAA'},{type:'leadership'}]){
   const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='resources');
   s.cards=[{...S.newCard('resource'),title:'First',body:'Short',...extra},{...S.newCard('resource'),title:'Second',body:'Short'}];
   assert.doesNotMatch(S.render(d),/<div class="l-pair">/);
  }
- for(const id of ['chair','closing']){
+ for(const id of ['chair','closing','updates','registration']){
   const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id===id);
   s.cards=['One','Two'].map(title=>({...S.newCard('resource'),title,body:'Short'}));
   assert.doesNotMatch(S.render(d),/<div class="l-pair">/);
@@ -93,13 +100,38 @@ test('web columns require adjacent short independent cards, never long titles, q
 
 test('image-and-text web arrangements stack in email and leave long-form image cards full width',()=>{
  const d=S.createPublication('program-letter'),s=d.sections[1];
- s.cards=[{...S.newCard(),title:'Civic participation',body:'Checklist and guidance.',imageUrl:'https://example.org/guide.png',imageAlt:'Checklist'},
+ s.cards=[{...S.newCard(),title:'Civic participation',body:'Checklist and guidance. '.repeat(70),imageUrl:'https://example.org/guide.png',imageAlt:'Checklist'},
  {...S.newCard('leadership'),title:'Chair update',body:'Long-form guidance.',imageUrl:'https://example.org/chair.png',imageAlt:'Chair'}];
  const web=S.render(d),email=S.render(d,{email:true});
  assert.equal((web.match(/<div class="l-image-layout">/g)||[]).length,1);
  assert.match(web,/grid-template-columns:480px minmax\(0,1fr\)/);
  assert.doesNotMatch(email,/l-image-layout/);
  assert(web.indexOf('Civic participation')<web.indexOf('<div class="l-image-layout">'));
+});
+
+test('web Chair body flows in paragraph order and trailing milestones note stays outside the paired entries',()=>{
+ const d=S.createPublication('program-letter'),chair=d.sections[0],milestones=d.sections.find(s=>s.id==='dissertation');
+ chair.cards=[{...S.newCard('leadership'),title:'Editorial heading',body:'Opening paragraph.\n\nMiddle paragraph.\n\nClosing signature.',author:'Chair author'}];
+ milestones.cards=['Deadline entry','Time reminder','Closing note'].map(title=>({...S.newCard('announcement'),title,body:'A substantial update. '.repeat(30)}));
+ const before=JSON.stringify(d),web=S.render(d),email=S.render(d,{email:true});
+ assert.match(web,/class="l-editorial"><p/);
+ assert.match(web,/column-count:2;column-gap:36px/);
+ assert.match(web,/\.l-editorial p\{break-inside:avoid-column\}/);
+ assert(web.indexOf('Opening paragraph.')<web.indexOf('Middle paragraph.'));
+ assert(web.indexOf('Middle paragraph.')<web.indexOf('Closing signature.'));
+ assert.match(web,/<div class="l-pair">[\s\S]*Deadline entry[\s\S]*Time reminder[\s\S]*<\/article><\/div><article[^>]*class="l-card l-closing">[\s\S]*Closing note/);
+ assert.match(web,/\.l-section>\.l-closing\{padding-top:20px;border-top:2px solid/);
+ assert.doesNotMatch(email,/l-editorial|column-count|l-closing|l-pair|data-letter-card/);
+ assert.equal(JSON.stringify(d),before);
+});
+
+test('web spotlight remains a full-width feature and accepts an existing image without adding content',()=>{
+ const d=S.createPublication('program-letter'),s=d.sections[1],card={...S.newCard('spotlight'),title:'Student feature',body:'Student contribution.',imageUrl:'https://example.org/approved-photo.png',imageAlt:'Approved student photo'};
+ s.cards=[card];const before=JSON.stringify(d),web=S.render(d);
+ assert.match(web,/class="l-card l-image-card l-spotlight"/);
+ assert.match(web,/src="https:\/\/example.org\/approved-photo.png" alt="Approved student photo"/);
+ assert.doesNotMatch(web,/<div class="l-pair">|placeholder/i);
+ assert.equal(JSON.stringify(d),before);
 });
 
 test('six-section rendering and exports preserve all edition content, order, links and metadata without mutation',()=>{
