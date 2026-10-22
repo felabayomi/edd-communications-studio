@@ -188,3 +188,16 @@ test('uploaded flyer is never silently omitted from email; HTTPS flyer renders e
  const files=S.makeFiles(Object.assign(make({imageUrl:https}),{}));
  assert(Object.values(files).some(v=>typeof v==='string'&&v.includes(`src="${https}"`)));
 });
+
+test('hosted image verification requires an anonymous 200 image response',async()=>{
+ const res=(status,type)=>async(url,opts)=>{assert.equal(opts.credentials,'omit');assert.equal(opts.redirect,'error');return {ok:status<300,status,headers:{get:()=>type}};};
+ assert.deepEqual(await client.verify('https://x.test/a.png',{fetcher:res(200,'image/png')}),{type:'image/png'});
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:res(401,'text/html')}),/HTTP 401/);
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:res(200,'text/html; charset=utf-8')}),/content type/);
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:async()=>{throw new Error('redirect');}}),/without signing in/);
+});
+
+test('Deploy Preview image hosts are flagged even though they are HTTPS',()=>{
+ for(const u of ['https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.jpg','https://eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.png','https://deploy-preview-8--eddcomstudio.netlify.app/x.png'])assert(S.previewHosted(u),u);
+ for(const u of ['https://eddcomstudio.netlify.app/email-images/2026/10/a-'+'a'.repeat(32)+'.png','http://deploy-preview-8--x.netlify.app/a.png',''])assert(!S.previewHosted(u),u);
+});

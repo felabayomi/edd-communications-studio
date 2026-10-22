@@ -140,7 +140,8 @@ function imageStatus(c){return `<div class="image-status" data-image-status="${e
 function imageStatusInner(c){const u=uploads.get(c.id),key=ImageHosting.hostedKey(c.imageUrl,location.origin);let html='';
  if(u?.phase==='uploading')html=`<span class="tag pending">Uploading for email… ${u.pct}%</span><progress max="100" value="${u.pct}" aria-label="Upload progress">${u.pct}%</progress>`;
  else if(u?.phase==='verifying')html='<span class="tag pending">Checking the hosted URL…</span><progress aria-label="Checking hosted image"></progress>';
- else if(S.https(c.imageUrl))html=`<span class="tag approved">✓ ${key?'Hosted by the Studio':'Hosted HTTPS URL'} · ready for email</span>${key.startsWith('preview/')?'<p class="hint">Hosted from a preview deploy. Upload it again from the production Studio before distribution.</p>':''}`;
+ else if(S.previewHosted(c.imageUrl))html='<span class="tag pending">⚠ Temporary Deploy Preview image · not ready for distribution</span><p class="hint">This HTTPS URL belongs to a preview deploy and may stop working or be access-protected, so it can fail in recipients\' Gmail. Re-select the image and choose Host image for email from the production Studio.</p>';
+ else if(S.https(c.imageUrl))html=`<span class="tag approved">✓ ${key?'Hosted by the Studio':'Hosted HTTPS URL'} · ready for email</span>`;
  else if(c.imageUrl)html='<span class="tag error">Image URL must be a valid HTTPS address</span>';
  else if(c.localImage)html=`<span class="tag pending">Local preview only · not ready for email</span>${hostable(c)&&!canHost()&&u?.phase!=='error'?`<p class="hint">${account.user?'Your account needs the editor role to host images.':'Sign in as an editor to host this image for email.'}</p>`:''}`;
  if(u?.phase==='error')html+=`<p class="upload-error" role="alert">${esc(u.message)}</p>`;

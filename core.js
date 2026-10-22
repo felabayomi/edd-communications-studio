@@ -8,6 +8,7 @@ const tokens={ink:'#083133',accent:'#083133',muted:'#536473',line:'#dce3e8',back
 const uid=()=> 'c-'+Math.random().toString(36).slice(2,11);
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function https(value){try{const u=new URL(value);return u.protocol==='https:'&&!!u.hostname&&!u.username&&!u.password&&!/[{}\s]/.test(value);}catch{return false;}}
+function previewHosted(value){if(!https(value))return false;const u=new URL(value);return /^\/email-images\/preview\//.test(u.pathname)||/^[^.]+--[^.]+\.netlify\.app$/.test(u.hostname);}
 function imageSource(value,email=false){return https(value)||(!email&&/^data:image\/(png|jpeg|gif|webp);base64,[a-zA-Z0-9+/=]+$/.test(value))?value:'';}
 function newCard(type='announcement'){return {id:uid(),type,enabled:true,title:'',date:'',label:'',body:'',author:'',deadline:'',quote:'',buttonLabel:'',destination:'',imageUrl:'',localImage:'',imageAlt:'',approved:false};}
 function linkLibrary(){return [
@@ -78,7 +79,7 @@ if(c.destination){const l=data.links.find(x=>x.id===c.destination);if(l?.editori
 if(c.imageUrl||c.localImage){imageCount++;if(!c.imageAlt.trim())add('error',`${prefix}: image alt text is missing.`,'Describe the image for readers using assistive technology.',s.id);
 if(c.imageUrl&&!https(c.imageUrl))add('error',`${prefix}: image URL must use HTTPS.`,'',s.id);
 if(c.localImage&&!c.imageUrl)add('error',`${prefix}: local image needs a hosted HTTPS URL for email.`,'Local images are available in draft web previews only. Sign in and choose Host image for email, or enter a hosted HTTPS image URL.',s.id);
-if(https(c.imageUrl)&&(u=>/^\/email-images\/preview\//.test(u.pathname)||/^[^.]+--[^.]+\.netlify\.app$/.test(u.hostname))(new URL(c.imageUrl)))add('warning',`${prefix}: image is hosted from a preview deploy.`,'Preview-hosted URLs depend on that preview staying available. Upload the image again from the production Studio before distribution.',s.id);
+if(previewHosted(c.imageUrl))add('warning',`${prefix}: image is hosted from a preview deploy.`,'Preview-hosted URLs depend on that preview staying available. Upload the image again from the production Studio before distribution.',s.id);
 }
 }}
 if(!results.some(r=>r.level==='error'))add('success','Content checks passed.','Ready for final export; manually verify linked destinations and image access.');
@@ -169,6 +170,6 @@ function parseBodyEdition(text){
  }
  return data;
 }
-const api={titles,ids,types,tokens,escape,https,imageSource,newCard,createEdition,createPublication,exportBase,activeSections,activeCards,editionSlug,validate,linksUsed,assetsUsed,validBodyLinks,updateBodyLinks,render,makeFiles,zip,parseEdition:parseBodyEdition};
+const api={titles,ids,types,tokens,escape,https,previewHosted,imageSource,newCard,createEdition,createPublication,exportBase,activeSections,activeCards,editionSlug,validate,linksUsed,assetsUsed,validBodyLinks,updateBodyLinks,render,makeFiles,zip,parseEdition:parseBodyEdition};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Studio=api;
 })(typeof window!=='undefined'?window:this);

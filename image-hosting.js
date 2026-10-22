@@ -34,15 +34,16 @@ function upload(blob,{name='',onProgress=()=>{},XHR=root.XMLHttpRequest,cookie=(
   xhr.send(blob);
  });
 }
-// Confirms that the hosted URL actually loads as an image before it replaces the local preview.
-function verify(url,{ImageType=root.Image,timeout=20000}={}){
- return new Promise((resolve,reject)=>{
-  const image=new ImageType(),timer=setTimeout(()=>fail(),timeout);
-  function fail(){clearTimeout(timer);image.onload=image.onerror=null;reject(new Error('The image uploaded, but its hosted URL could not be loaded. Your local preview image is kept; try again.'));}
-  image.onload=()=>{clearTimeout(timer);resolve({width:image.naturalWidth,height:image.naturalHeight});};
-  image.onerror=fail;
-  image.src=url;
- });
+// Confirms that the hosted URL is publicly readable: no cookies are sent, so a login page or protected preview cannot pass as an image.
+async function verify(url,{fetcher=root.fetch?.bind(root)}={}){
+ const fail=reason=>new Error('The image uploaded, but its public URL could not be confirmed ('+reason+'). Your local preview image is kept; try again.');
+ if(!fetcher)throw fail('this browser cannot check it');
+ let response;
+ try{response=await fetcher(url,{method:'GET',credentials:'omit',cache:'no-store',redirect:'error'});}catch{throw fail('it could not be reached without signing in');}
+ if(!response.ok)throw fail('HTTP '+response.status);
+ const type=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+ if(!TYPES.includes(type))throw fail('unexpected content type '+(type||'none'));
+ return {type};
 }
 async function remove(key,{fetcher=root.fetch?.bind(root),cookie=()=>root.document?.cookie||''}={}){
  const token=sessionToken(cookie());let response,payload=null;
