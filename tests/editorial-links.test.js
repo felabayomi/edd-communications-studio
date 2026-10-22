@@ -34,6 +34,10 @@ test('selecting an editorial link before a CTA never aliases their snapshots',()
  const html=S.render(data,{email:true});assert(html.includes(`href="${row.url}"`));assert(html.includes('href="https://example.org/new-resources"'));
  assert.deepEqual(S.parseEdition(JSON.stringify(data)),data);
  card.destination=editorial;assert.throws(()=>S.parseEdition(JSON.stringify(data)),/cannot be card destination snapshots/);
+ const savedURL=data.links.find(l=>l.id===editorial).url;
+ assert.equal(D.syncEditorial(data,[{...row,url:'https://example.org/another-url',version:3}]),false);
+ assert.equal(data.links.find(l=>l.id===editorial).url,savedURL);
+ assert(S.validate(data).some(r=>r.level==='error'&&r.message.includes('aliases an editorial link')));
 });
 test('registry refresh updates only editorial entries, includes inactive rows and marks missing rows unapproved',()=>{
  const {data,card}=ready(),row=D.seeds[0],id=add(data,card),snapshot=D.select(data,'registry/'+row.id,[row]);

@@ -43,8 +43,9 @@ function selectEditorial(data,rowId,rows){
  data.links.push({id,label:row.name,url:row.url,approved:true,source:'Approved Destinations editorial link',editorialRegistry:true,registryId:row.id,registryVersion:row.version});return id;
 }
 function syncEditorial(data,rows,onlyId){
- let changed=false;const changedUrls=new Set();
- for(const link of data.links.filter(l=>l.editorialRegistry===true&&(!onlyId||l.registryId===onlyId))){
+ let changed=false;const changedUrls=new Set(),cardDestinations=new Set(data.sections.flatMap(s=>s.cards.map(c=>c.destination)));
+ // Malformed aliases must never change a card's saved CTA.
+ for(const link of data.links.filter(l=>l.editorialRegistry===true&&!cardDestinations.has(l.id)&&(!onlyId||l.registryId===onlyId))){
   const row=rows.find(r=>r.id===link.registryId);let values={approved:false};
   if(row){let approved=true;try{validate(row);}catch{approved=false;}values={label:typeof row.name==='string'?row.name:link.label,url:typeof row.url==='string'?row.url:link.url,registryVersion:row.version,approved};}
   if(values.url!==undefined&&link.url!==values.url)changedUrls.add(link.id);
