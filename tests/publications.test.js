@@ -57,7 +57,7 @@ function editorialEdition(){
  return d;
 }
 
-test('Program Letter uses wide responsive web compositions and an inline single-column email fallback',()=>{
+test('Program Letter uses wide web compositions and hybrid email pairs with head-independent wrapping',()=>{
  const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='events');
  const card=(title,extra={})=>({...S.newCard('event'),title,body:'A short independent update.',date:'2026-11-03',...extra});
  s.cards=[card('First event'),card('Second event'),card('Long-form event',{body:'Detailed information. '.repeat(80)}),card('Third event'),card('Fourth event')];
@@ -68,14 +68,50 @@ test('Program Letter uses wide responsive web compositions and an inline single-
  assert.match(web,/\.l-section\{padding:10px 16px\}/);assert.match(web,/min-width:0/);assert.match(web,/overflow-wrap:anywhere/);
  assert.equal((web.match(/<div class="l-pair">/g)||[]).length,2);
  assert.doesNotMatch(web,/l-longform/);
- assert.match(email,/max-width:680px;table-layout:fixed/);assert.match(email,/\[if mso\]><table role="presentation" width="680"/);
- assert.doesNotMatch(fragment,/display:grid|display:flex|@media|l-pair|l-image-layout|width="(?:40%|48%|60%)"/);
+ assert.match(email,/max-width:680px;table-layout:fixed/);assert.match(email,/\[if mso\]><table role="presentation" width="680" border="0" cellspacing="0" cellpadding="0"/);
+ assert.doesNotMatch(fragment,/display:grid|display:flex|@media|class="l-pair"|l-image-layout|width="(?:40%|48%|60%)"/);
  assert.doesNotMatch(email,/<style/);
+ assert.equal((fragment.match(/class="letter-email-pair"/g)||[]).length,2);
+ assert.equal((fragment.match(/class="letter-email-column"/g)||[]).length,4);
+ assert.match(fragment,/display:inline-block;width:100%;max-width:316px;vertical-align:top/);
+ assert.equal((fragment.match(/width="632" border="0" cellspacing="0" cellpadding="0"><tr><td width="316" valign="top"/g)||[]).length,2);
+ assert.doesNotMatch(fragment,/width="50%"|min-width:\d+px/);
  for(const html of [web,fragment]){
   let at=-1;for(const c of s.cards){const next=html.indexOf(S.escape(c.title),at+1);assert(next>at);at=next;}
   assert.match(html,/2026-11-03/);
   assert.doesNotMatch(html,/bgcolor="#(?:D9E7EB|E7DBE9|F7E2D8)"|border-left:5px|l-tile/);
  }
+});
+
+test('approved web magazine output stays byte-for-byte unchanged for six sections and eleven cards',()=>{
+ const d=S.createPublication('program-letter');d.issue.year='2026';d.issue.issueDate='2026-10-27';d.sections=['chair','updates','events','registration','resources','dissertation'].map(id=>d.sections.find(s=>s.id===id));
+ for(const [i,s] of d.sections.entries())s.cards=Array.from({length:[1,2,2,1,2,3][i]},(_,j)=>({...S.newCard(i===0?'leadership':'resource'),id:`frozen-${i}-${j}`,title:`Heading ${i}-${j}`,body:`First paragraph ${i}-${j}.\n\nSecond paragraph.`,buttonLabel:'Visit destination',destination:'hub'}));
+ d.sections[1].cards[0].imageUrl='https://example.org/guide.png';d.sections[1].cards[0].imageAlt='Guide checklist';d.sections[1].cards[1].type='spotlight';
+ assert.equal(hash(S.render(d)),'f3ab0150e71a067de68fef295f8368baa3f9732ee20b8fe9d93406126bffaeb8');
+ const before=JSON.stringify(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email);
+ assert.equal((fragment.match(/class="letter-email-pair"/g)||[]).length,3);
+ assert.equal((fragment.match(/<h3 /g)||[]).length,11);
+ assert.equal((fragment.match(/<h2 /g)||[]).length,6);
+ assert.match(fragment,/src="https:\/\/example.org\/guide.png" alt="Guide checklist" width="480"/);
+ let at=-1;for(const s of d.sections)for(const c of s.cards){const next=fragment.indexOf(S.escape(c.title),at+1);assert(next>at);at=next;assert.equal(fragment.split(S.escape(c.title)).length-1,1);}
+ assert.equal(JSON.stringify(d),before);
+});
+
+test('email keeps images, quotes, leadership, disabled entries and unsupported sections out of paired groups',()=>{
+ for(const extra of [{quote:'Full-width quotation'},{imageUrl:'https://example.org/image.png',imageAlt:'Unchanged image'},{localImage:'data:image/png;base64,AAAA'},{type:'leadership'}]){
+  const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='resources');
+  s.cards=[{...S.newCard('resource'),title:'First',body:'Text',...extra},{...S.newCard('resource'),title:'Second',body:'Text'}];
+  assert.doesNotMatch(S.render(d,{email:true}),/class="letter-email-pair"/);
+ }
+ for(const id of ['chair','closing','updates','registration']){
+  const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id===id);
+  s.cards=['First','Second'].map(title=>({...S.newCard('resource'),title,body:'Text'}));
+  assert.doesNotMatch(S.render(d,{email:true}),/class="letter-email-pair"/);
+ }
+ const d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='events');
+ s.cards=['One','Disabled','Two','Odd last'].map(title=>({...S.newCard('event'),title,body:'Text',enabled:title!=='Disabled'}));
+ const email=S.render(d,{email:true});assert.equal((email.match(/class="letter-email-pair"/g)||[]).length,1);
+ assert.doesNotMatch(email,/Disabled/);assert.match(email,/<\/div><!--\[if mso\]><\/td><\/tr><\/table><!\[endif\]-->[\s\S]*Odd last/);
 });
 
 test('web supporting sections pair substantial entries without changing order or pairing images, quotes or leadership cards',()=>{
@@ -121,7 +157,8 @@ test('web Chair body flows in paragraph order and trailing milestones note stays
  assert(web.indexOf('Middle paragraph.')<web.indexOf('Closing signature.'));
  assert.match(web,/<div class="l-pair">[\s\S]*Deadline entry[\s\S]*Time reminder[\s\S]*<\/article><\/div><article[^>]*class="l-card l-closing">[\s\S]*Closing note/);
  assert.match(web,/\.l-section>\.l-closing\{padding-top:20px;border-top:2px solid/);
- assert.doesNotMatch(email,/l-editorial|column-count|l-closing|l-pair|data-letter-card/);
+ assert.doesNotMatch(email,/l-editorial|column-count|l-closing|class="l-pair"|data-letter-card/);
+ assert.match(email,/class="letter-email-pair"[\s\S]*Deadline entry[\s\S]*Time reminder[\s\S]*<\/div><!--\[if mso\]><\/td><\/tr><\/table><!\[endif\]-->[\s\S]*Closing note/);
  assert.equal(JSON.stringify(d),before);
 });
 

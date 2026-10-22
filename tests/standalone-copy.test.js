@@ -19,15 +19,16 @@ test('standalone file excludes private records, dependencies, APIs and storage; 
  assert.doesNotMatch(page,/PRIVATE_CREDENTIAL|PRIVATE_UNUSED_LINK|DATABASE_URL|\.netlify|localStorage|sessionStorage|fetch\(|XMLHttpRequest|<script\s+src/i);
  assert.equal((page.match(/<script>/g)||[]).length,1);assert.match(page,/&lt;script&gt;/);assert.match(page,/connect-src 'none'/);
 });
-function runtime({native=false,denied=false,legacy=false,text=false}={}){
- const html='<div style="color:#083133"><p>Publication only</p><a href="https://example.org">Read more</a></div>',events={},copyEvents=new Set(),writes=[],nodes={publication:{innerHTML:html},'copy-status':{textContent:''},'copy-gmail':{disabled:false},'select-publication':{}};
+function runtime({native=false,denied=false,legacy=false,text=false,source}={}){
+ const page=C.makePage(source||S.render(edition('newsletter','Approved'),{email:true}));
+ const html=source?page.match(/<main id="publication">([\s\S]*?)<\/main>/)[1]:'<div style="color:#083133"><p>Publication only</p><a href="https://example.org">Read more</a></div>',events={},copyEvents=new Set(),writes=[],nodes={publication:{innerHTML:html},'copy-status':{textContent:''},'copy-gmail':{disabled:false},'select-publication':{}};
  for(const key of ['copy-gmail','select-publication'])nodes[key].addEventListener=(event,handler)=>events[key]=handler;
  const selection={rangeCount:0,removeAllRanges(){},addRange(range){this.selected=range.node;}};
  class Item{constructor(parts){this.parts=parts;}}
  const clipboard={};if(native)clipboard.write=async items=>{if(denied)throw new Error('denied');writes.push(items[0].parts);};if(text)clipboard.writeText=async value=>writes.push({'text/plain':value});
  const document={getElementById:id=>nodes[id],createRange:()=>({selectNodeContents(node){this.node=node;}}),addEventListener:(name,fn)=>copyEvents.add(fn),removeEventListener:(name,fn)=>copyEvents.delete(fn),execCommand:()=>{if(!legacy)return false;const data={};for(const fn of copyEvents)fn({clipboardData:{setData:(mime,value)=>data[mime]=value},preventDefault(){}});writes.push(data);return true;}};
  const context=vm.createContext({document,navigator:{clipboard},window:{Blob,ClipboardItem:native?Item:undefined,getSelection:()=>selection},Blob});
- const page=C.makePage(S.render(edition('newsletter','Approved'),{email:true}));vm.runInContext(page.match(/<script>([\s\S]*)<\/script>/)[1],context);
+ vm.runInContext(page.match(/<script>([\s\S]*)<\/script>/)[1],context);
  return {events,nodes,writes,copyEvents,selection,html};
 }
 test('native clipboard writes HTML and plain text excluding page controls',async()=>{
@@ -39,4 +40,19 @@ test('missing or denied Clipboard API uses rich copy-event fallback and removes 
 test('blocked rich copying clearly labels plain-text fallback; total failure offers manual selection',async()=>{
  const r=runtime({native:true,denied:true,text:true});await r.events['copy-gmail']();assert.match(r.nodes['copy-status'].textContent,/Plain text copied; formatting was not preserved/);
  const blocked=runtime();await blocked.events['copy-gmail']();assert.match(blocked.nodes['copy-status'].textContent,/Automatic copying is blocked/);blocked.events['select-publication']();assert.equal(blocked.selection.selected,blocked.nodes.publication);assert.match(blocked.nodes['copy-status'].textContent,/Only the publication is selected/);assert.equal(blocked.nodes['copy-gmail'].disabled,false);
+});
+test('paired Program Letter copy page preserves exported HTML through native and legacy clipboard paths',async()=>{
+ const d=edition('program-letter','Draft');d.sections.find(s=>s.id==='events').cards=['First event','Second event'].map(title=>({...S.newCard('event'),title,body:'Community gathering.',buttonLabel:'Join',destination:'hub'}));
+ const files=P.makeFiles(d),source=Object.entries(files).find(([name])=>name.endsWith('-email.html'))[1],expected=H.emailFragment(source);
+ assert(files['OPEN-TO-COPY.html'].includes('<main id="publication">'+expected+'</main>'));
+ for(const options of [{native:true},{legacy:true},{native:true,denied:true,legacy:true}]){
+  const r=runtime({...options,source});await r.events['copy-gmail']();
+  const parts=r.writes[0],html=typeof parts['text/html']==='string'?parts['text/html']:await parts['text/html'].text();
+  const text=typeof parts['text/plain']==='string'?parts['text/plain']:await parts['text/plain'].text();
+  assert.equal(html,expected);assert.equal(text,H.plainText(expected));
+  assert.match(html,/class="letter-email-pair"/);assert.equal((html.match(/class="letter-email-column"/g)||[]).length,2);
+  assert.match(html,/max-width:316px/);assert.match(html,/width="632"/);assert.match(html,/DRAFT PREVIEW/);
+  assert.doesNotMatch(html,/HIDDEN_PREHEADER|id="copy-gmail"|id="select-publication"|id="copy-status"/);
+  assert.match(r.nodes['copy-status'].textContent,/Formatted publication copied/);assert.equal(r.copyEvents.size,0);
+ }
 });
