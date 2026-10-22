@@ -87,7 +87,7 @@ test('approved web magazine output stays byte-for-byte unchanged for six section
  const d=S.createPublication('program-letter');d.issue.year='2026';d.issue.issueDate='2026-10-27';d.sections=['chair','updates','events','registration','resources','dissertation'].map(id=>d.sections.find(s=>s.id===id));
  for(const [i,s] of d.sections.entries())s.cards=Array.from({length:[1,2,2,1,2,3][i]},(_,j)=>({...S.newCard(i===0?'leadership':'resource'),id:`frozen-${i}-${j}`,title:`Heading ${i}-${j}`,body:`First paragraph ${i}-${j}.\n\nSecond paragraph.`,buttonLabel:'Visit destination',destination:'hub'}));
  d.sections[1].cards[0].imageUrl='https://example.org/guide.png';d.sections[1].cards[0].imageAlt='Guide checklist';d.sections[1].cards[1].type='spotlight';
- assert.equal(hash(S.render(d)),'f3ab0150e71a067de68fef295f8368baa3f9732ee20b8fe9d93406126bffaeb8');
+ assert.equal(hash(S.render(d)),'ebfa87ca800c63a2b4941f203eaa682223c7bef1f4a9dd4bc14b13667dde58e7');
  const before=JSON.stringify(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email);
  assert.equal((fragment.match(/class="letter-email-pair"/g)||[]).length,3);
  const headings=[...fragment.matchAll(/<h3 style="([^"]*)">([^<]*)<\/h3>/g)];
@@ -235,4 +235,20 @@ test('Program Letter content stays escaped and disabled or unapproved destinatio
   assert.doesNotMatch(html,/<script|<img src=x|Disabled card sentinel|href="https:\/\/example.org\/pending"/);
   assert.match(html,/Read more · destination pending/);
  }
+});
+
+test('web Program Letter adds restrained teal, sage and cream treatments while keeping the 1,160px layout',()=>{
+ const d=S.createPublication('program-letter'),sec=d.sections.find(s=>s.id==='updates');
+ sec.cards=[{...S.newCard('spotlight'),title:'Student Spotlight',body:'Story.',imageUrl:'https://example.org/spot.jpg',imageAlt:'Student photo'},{...S.newCard('resource'),title:'Community Co-working & Café',body:'Open hours.',imageUrl:'https://example.org/flyer.png',imageAlt:'Café flyer',buttonLabel:'Details'}];
+ const web=S.render(d);
+ assert.match(web,/max-width:1160px/);
+ for(const c of ['#7A9A82','#FAF6EC','#EEF3EE','#083133'])assert(web.includes(c),c);
+ assert.match(web,/\.l-spotlight\{[^}]*background:#EEF3EE[^}]*border-left:4px solid #083133/);
+ assert.match(web,/\.l-pair>\.l-card\{[^}]*background:#FAF6EC/);
+ assert.match(web,/@media\(max-width:600px\)/);
+ assert.equal((web.match(/class="l-image-layout"/g)||[]).length,2);
+ assert.match(web,/class="l-card l-image-card l-spotlight"/);
+ assert.match(web,/<img src="https:\/\/example.org\/flyer.png" alt="Café flyer"/);
+ assert.match(web,/<img src="https:\/\/example.org\/spot.jpg" alt="Student photo"/);
+ assert.doesNotMatch(S.render(d,{email:true}),/#EEF3EE|l-image-card/);
 });
