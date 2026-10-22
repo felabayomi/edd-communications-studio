@@ -31,6 +31,21 @@ Open http://127.0.0.1:4173. Keep the terminal running while using the applicatio
 
 The ZIP contains `output/<edition>/edd-newsletter-<edition>.html`, the separate `-email.html`, `content.json`, `links-used.json`, and `README.txt`. Draft HTML filenames also contain `-draft`. ZIPs are created entirely in the browser. The browser downloads them to its configured Downloads location; it does not silently write to an arbitrary filesystem folder.
 
+### Editorial hyperlinks
+
+**Insert/Edit Link** appears immediately below each card's **Body** text box.
+
+1. Create and approve the HTTPS destination in **Approved Destinations**, or expose an existing **Submission Form** as a destination. No arbitrary URL field is offered in the link picker.
+2. Highlight a phrase in the card's Body, then choose **Insert/Edit Link**.
+3. Search by destination name or category, select the clearly named destination, and choose **Apply link**. Check the clickable, underlined text in the Web or Email preview.
+4. To change or remove it, place the cursor inside the linked phrase (or highlight it again), choose **Insert/Edit Link**, then choose another destination or **Remove link**. Removing a link keeps the text.
+
+For the Spotlight card, leave the existing Common Thread button destination untouched. Type **Submit Your EdD Story** in its Body and link only that phrase to its Approved Destination when the form URL is ready. This feature never creates a form or changes newsletter content automatically.
+
+Editorial links follow the destination's current approved HTTPS URL when the library loads or is refreshed (including when opening the picker). Card-level button destinations retain their existing saved snapshots. Inactive destinations cannot be selected for new links; existing links retain their valid approved URL. A missing destination blocks final export and renders as plain text. Offline work retains the last saved URL; refresh **Approved Destinations** before distribution to check for changes. Already exported files or pasted emails cannot update themselves.
+
+The body remains plain text with additive `bodyLinks` destination references and character ranges in Content JSON. Browser autosave, online editions, and JSON backups retain these references without rewriting old cards or images. Editing body text rebases link ranges; deleting linked text or inserting blank lines can remove its link, so review links after major text edits. Web, email HTML, ZIP handoffs, and **Copy for Gmail** share the safe renderer and inline link styling.
+
 ## Architecture and files
 
 - `index.html`: application shell and accessible navigation.

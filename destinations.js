@@ -1,6 +1,7 @@
 (function(root){
 'use strict';
 const S=typeof module!=='undefined'&&module.exports?require('./core'):root.Studio;
+const P=typeof module!=='undefined'&&module.exports?require('./publications'):root.Publications;
 const categories=['Program Support','Community Center','Events/Zoom','Library & Research','Forms','University Resources','Other'];
 // Offline starting choices only. Successful registry reads replace these, including an empty registry.
 const seeds=[
@@ -28,12 +29,32 @@ function select(data,value,rows){
  const row=rows.find(r=>r.id===value.slice(9)&&r.active);if(!row)throw new Error('This destination is no longer active. Refresh Approved Destinations.');
  validate(row);
  // Never mutate an existing snapshot, even when an imported ID happens to match.
- const existing=data.links.find(l=>l.registryId===row.id&&l.registryVersion===row.version&&l.label===row.name&&l.url===row.url&&l.approved);
+ const existing=data.links.find(l=>!l.editorialRegistry&&l.registryId===row.id&&l.registryVersion===row.version&&l.label===row.name&&l.url===row.url&&l.approved);
  if(existing)return existing.id;
  const base=`destination-${row.id}-v${row.version}`;let id=base,n=1;while(data.links.some(l=>l.id===id))id=base+'-'+n++;
  data.links.push({id,label:row.name,url:row.url,approved:true,source:'Approved Destinations registry snapshot',registryId:row.id,registryVersion:row.version});return id;
 }
-function referenced(data,row){return data.links.some(l=>(l.registryId===row.id||l.id===row.legacy_id||l.url===row.url)&&data.sections.some(s=>s.cards.some(c=>c.destination===l.id)));}
+function selectEditorial(data,rowId,rows){
+ const row=rows.find(r=>r.id===rowId&&r.active);if(!row)throw new Error('This destination is no longer active. Refresh Approved Destinations.');
+ validate(row);
+ const existing=data.links.find(l=>l.editorialRegistry===true&&l.registryId===row.id);
+ if(existing){syncEditorial(data,[row],row.id);return existing.id;}
+ const base=`editorial-${row.id}`;let id=base,n=1;while(data.links.some(l=>l.id===id))id=base+'-'+n++;
+ data.links.push({id,label:row.name,url:row.url,approved:true,source:'Approved Destinations editorial link',editorialRegistry:true,registryId:row.id,registryVersion:row.version});return id;
+}
+function syncEditorial(data,rows,onlyId){
+ let changed=false;const changedUrls=new Set(),cardDestinations=new Set(data.sections.flatMap(s=>s.cards.map(c=>c.destination)));
+ // Malformed aliases must never change a card's saved CTA.
+ for(const link of data.links.filter(l=>l.editorialRegistry===true&&!cardDestinations.has(l.id)&&(!onlyId||l.registryId===onlyId))){
+  const row=rows.find(r=>r.id===link.registryId);let values={approved:false};
+  if(row){let approved=true;try{validate(row);}catch{approved=false;}values={label:typeof row.name==='string'?row.name:link.label,url:typeof row.url==='string'?row.url:link.url,registryVersion:row.version,approved};}
+  if(values.url!==undefined&&link.url!==values.url)changedUrls.add(link.id);
+  for(const [key,value] of Object.entries(values))if(link[key]!==value){link[key]=value;changed=true;}
+ }
+ if(changedUrls.size)for(const section of data.sections)for(const card of section.cards)if(P.requiresApproval(section,card)&&card.approved&&S.validBodyLinks(card).some(r=>changedUrls.has(r.destination)))card.approved=false;
+ return changed;
+}
+function referenced(data,row){return data.links.some(l=>(l.registryId===row.id||l.id===row.legacy_id||l.url===row.url)&&data.sections.some(s=>s.cards.some(c=>c.destination===l.id||(Array.isArray(c.bodyLinks)&&c.bodyLinks.some(r=>r?.destination===l.id)))));}
 function createClient(fetcher){
  async function request(method,id,data){
   let res,body;try{res=await fetcher('/.netlify/functions/destinations'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(20000)});body=await res.json();}
@@ -42,5 +63,5 @@ function createClient(fetcher){
  }
  return {list:async()=>(await request('GET')).destinations,save:async(id,destination,version=null)=>(await request(version===null?'POST':'PUT',version===null?null:id,{id,destination,version})).destination,remove:(id,version)=>request('DELETE',id,{version})};
 }
-const api={categories,seeds,validate,options,select,referenced,createClient};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Destinations=api;
+const api={categories,seeds,validate,options,select,selectEditorial,syncEditorial,referenced,createClient};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Destinations=api;
 })(typeof window!=='undefined'?window:this);

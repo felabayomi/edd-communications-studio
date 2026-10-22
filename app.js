@@ -5,16 +5,19 @@ const P=window.Publications;
 const S=window.Studio,esc=S.escape,legacyKey=directorMode?'edd-newsletter-director-review-v1':'edd-newsletter-studio-v1',storageKey=directorMode?'edd-communications-director-review-v2':'edd-communications-studio-v2';
 let edition=P.normalize(directorMode?createDirectorSample():S.createPublication('newsletter')),view=directorMode?'editor':'create',hasEdition=directorMode,selected='issue',previewMode='desktop',previewKind='web',saveTimer,toastTimer;
 let saveMessage=directorMode?'Director-review edition':'Choose a publication to begin';
+let registryReady=false,linkSelection=null;
 try{const saved=localStorage.getItem(storageKey)||localStorage.getItem(legacyKey);if(saved){edition=S.parseEdition(saved);hasEdition=true;view='editor';saveMessage='Saved on this device';}}catch{saveMessage='Saved data could not be opened; original storage has been retained';}
 const workspace=document.querySelector('#workspace');
 const online=EditionStorage.createClient(window.fetch.bind(window));
 const registry=DestinationManager.createManager({api:Destinations.createClient(window.fetch.bind(window)),getEdition:()=>hasEdition?edition:null,confirmChange:(...args)=>confirmChange(...args),toast:message=>toast(message),onChange:()=>{
+ if(registryReady&&registry.state.loaded&&hasEdition&&Destinations.syncEditorial(edition,registry.state.rows))changed();
  if(view==='links'){render();return;}
  for(const select of document.querySelectorAll('select[data-field="destination"]')){
   const card=edition.sections.flatMap(s=>s.cards).find(c=>c.id===select.dataset.card);
   if(card)select.innerHTML=Destinations.options(edition,card,registry.state.rows);
  }
 }});
+registryReady=true;
 function linksView(){return registry.view()+(hasEdition?`<details class="content-page"><summary>Links saved in this edition (portable snapshots)</summary>${editionLinksView()}</details>`:'');}
 const forms=SubmissionFormsManager.createManager({api:SubmissionForms.createClient(window.fetch.bind(window)),getEdition:()=>hasEdition?edition:null,confirmChange:(...args)=>confirmChange(...args),toast:message=>toast(message),onSaved:()=>registry.refresh(),onChange:()=>{if(view==='forms')render();}});
 let onlineRef=null,onlineRows=[],onlineMessage='Choose Refresh to load saved online editions.',onlineBusy=false;
@@ -58,12 +61,62 @@ async function onlineAction(action,id){
  finally{onlineBusy=false;render();}
 }
 const section=()=>edition.sections.find(s=>s.id===selected);
-const field=(label,key,value,options={})=>`<label class="field">${esc(label)}${options.textarea?`<textarea data-field="${key}" ${options.scope||''}>${esc(value)}</textarea>`:`<input type="${options.type||'text'}" data-field="${key}" value="${esc(value)}" ${options.scope||''}>`}</label>`;
+const field=(label,key,value,options={})=>`<label class="field">${esc(label)}${options.textarea?`<textarea data-field="${key}" ${options.scope||''}>${esc(value)}</textarea>`:`<input type="${options.type||'text'}" data-field="${key}" value="${esc(value)}" ${options.scope||''}>`}</label>${key==='body'?`<button type="button" data-action="editorial-link" ${options.scope||''}>Insert/Edit Link</button><p class="hint">Highlight body text to insert a link, or place the cursor in linked text to edit or remove it. Choose from Approved Destinations; links appear in the preview.</p>`:''}`;
+function editorialRange(card,start,end){
+ const existing=S.validBodyLinks(card).find(link=>start===end?start>=link.start&&start<=link.end:start>=link.start&&end<=link.end);
+ if(existing)return {...existing};
+ if(start===end)throw new Error('Highlight the body text you want to link first.');
+ if(/\n\s*\n/.test(card.body.slice(start,end)))throw new Error('Choose text within a single paragraph.');
+ if(!S.validBodyLinks({...card,bodyLinks:[{start,end,destination:'selection'}]}).length)throw new Error('Select readable text within one paragraph, without blank lines.');
+ return {start,end};
+}
+function editorialOptions(query=''){
+ const select=document.querySelector('#editorial-destination'),current=select.value||linkSelection?.registryId||'';
+ const rows=registry.state.loaded?registry.state.rows.filter(row=>row.active&&S.https(row.url)&&`${row.name} ${row.category||''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())):[];
+ select.innerHTML='<option value="">Choose an approved destination…</option>'+rows.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}${row.category?' · '+esc(row.category):''}</option>`).join('');
+ select.value=rows.some(row=>row.id===current)?current:'';
+ document.querySelector('#editorial-link-status').textContent=!registry.state.loaded?'Connect to load Approved Destinations before inserting a link. Existing links and body text are unchanged.':rows.length?`${rows.length} approved destination(s).`:'No matching approved destinations. Create or activate one in Approved Destinations first.';
+}
+async function openEditorialLink(id){
+ const card=findCard(id),textarea=document.querySelector(`textarea[data-field="body"][data-card="${CSS.escape(id)}"]`);
+ if(!card||!textarea)return;
+ const range=editorialRange(card,textarea.selectionStart,textarea.selectionEnd),saved=edition.links.find(link=>link.id===range.destination);
+ linkSelection={cardId:id,body:card.body,...range,registryId:saved?.registryId};
+ const dialog=document.querySelector('#editorial-link-dialog');
+ document.querySelector('#editorial-link-text').textContent=card.body.slice(range.start,range.end);
+ document.querySelector('#editorial-link-search').value='';
+ document.querySelector('#editorial-destination').value='';
+ document.querySelector('#editorial-link-remove').disabled=!range.destination;
+ editorialOptions();
+ dialog.showModal();
+ document.querySelector('#editorial-link-search').focus();
+ await registry.refresh();
+ if(dialog.open)editorialOptions(document.querySelector('#editorial-link-search').value);
+}
+function applyEditorialLink(remove=false){
+ if(!linkSelection)return;
+ const {cardId,body,start,end}=linkSelection,card=findCard(cardId);
+ if(!card||card.body!==body)throw new Error('The body changed. Close this dialog and select the text again.');
+ const rowId=document.querySelector('#editorial-destination').value;
+ if(!remove&&(!registry.state.loaded||!rowId))throw new Error('Choose an active Approved Destination first.');
+ const destination=remove?'':Destinations.selectEditorial(edition,rowId,registry.state.rows);
+ card.bodyLinks=S.validBodyLinks(card).filter(link=>link.end<=start||link.start>=end);
+ if(destination)card.bodyLinks.push({start,end,destination});
+ card.bodyLinks.sort((a,b)=>a.start-b.start);
+ if(!card.bodyLinks.length)delete card.bodyLinks;
+ card.approved=false;
+ document.querySelector('#editorial-link-dialog').close();
+ changed();persist();render();
+ const textarea=document.querySelector(`textarea[data-field="body"][data-card="${CSS.escape(cardId)}"]`);
+ textarea?.focus();textarea?.setSelectionRange(start,end);
+ linkSelection=null;
+ toast(remove?'Hyperlink removed; the body text is unchanged.':'Approved Destination linked. Review it in the preview.');
+}
 function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',4500);}
 function persist(){clearTimeout(saveTimer);saveTimer=null;if(!hasEdition)return;edition.publication.updatedAt=new Date().toISOString();try{localStorage.setItem(storageKey,JSON.stringify(edition));persistOnlineRef();saveMessage='Saved on this device';}catch{saveMessage='Not saved · download Content JSON to keep edits';}document.querySelector('#save-status').textContent=saveMessage;}
 function changed(){edition.publication.updatedAt=new Date().toISOString();document.querySelector('#save-status').textContent='Saving…';clearTimeout(saveTimer);saveTimer=setTimeout(persist,300);refreshPreview();updateCount();}
 function updateCount(){if(!hasEdition){document.querySelector('#issue-count').textContent='';return;}const n=S.validate(edition).filter(r=>r.level==='error').length;document.querySelector('#issue-count').textContent=n?String(n):'✓';}
-function render(){document.querySelector('#publication-context').textContent=hasEdition?P.label(edition)+' · '+edition.publication.status+' · '+edition.publication.title:'';document.querySelector('.workflow').hidden=!hasEdition;document.querySelector('.header-actions [data-view=export]').disabled=!hasEdition;document.querySelector('#save-status').textContent=saveMessage;document.querySelectorAll('.workflow [data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);if(b.dataset.view===view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});updateCount();workspace.innerHTML=view==='forms'?forms.view():view==='handoff'?PrivateHandoff.view(edition):view==='editions'?editionsView():view==='create'?creationView():view==='editor'?editor():view==='links'?linksView():view==='readiness'?readiness():exportsView();refreshPreview();}
+function render(){if(registryReady&&registry.state.loaded&&hasEdition&&Destinations.syncEditorial(edition,registry.state.rows))persist();document.querySelector('#publication-context').textContent=hasEdition?P.label(edition)+' · '+edition.publication.status+' · '+edition.publication.title:'';document.querySelector('.workflow').hidden=!hasEdition;document.querySelector('.header-actions [data-view=export]').disabled=!hasEdition;document.querySelector('#save-status').textContent=saveMessage;document.querySelectorAll('.workflow [data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);if(b.dataset.view===view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});updateCount();workspace.innerHTML=view==='forms'?forms.view():view==='handoff'?PrivateHandoff.view(edition):view==='editions'?editionsView():view==='create'?creationView():view==='editor'?editor():view==='links'?linksView():view==='readiness'?readiness():exportsView();refreshPreview();}
 function creationView(){return `<section class="content-page creation-page"><p class="eyebrow">EdD Communications Studio</p><h1>What are you creating?</h1><p class="hint">One shared design and production workflow. Choose the default modules for your communication.</p><div class="export-grid"><article class="export-card"><p class="eyebrow">Current / student-facing</p><h2>Program Letter</h2><p>Timely program updates, reminders, resources, and events from the EdD Program Office.</p><p class="hint">Typically 3–4 times per semester, as needed.</p><button class="primary" data-action="create-letter">Create Program Letter</button></article><article class="export-card"><p class="eyebrow">Editorial / community-wide</p><h2>Newsletter</h2><p>Stories, community highlights, alumni, scholarship, residency, and broader program news.</p><p class="hint">Typically once per semester. CPED is available as an optional module.</p><button class="primary" data-action="create-newsletter">Create Newsletter</button></article></div>${hasEdition?'<button style="margin-top:20px" data-action="cancel-create">Return to current edition</button>':''}<p class="hint" style="margin-top:24px">Both use the same preview, email HTML, Copy for Gmail, and export bundle. Nothing is sent from this application.</p><button data-action="import">Import existing edition JSON</button><input type="file" id="import-file" accept="application/json,.json" hidden></section>`;}
 function metadataEditor(){const m=edition.publication,scope='data-publication="true"';return `<div class="banner"><strong>${esc(P.label(edition))}</strong> · ${esc(m.status)}</div>${field('Publication title','title',m.title,{scope})}${field('Issue / edition','edition',m.edition,{scope})}<div class="grid-two">${field('Semester','semester',m.semester,{scope})}${field('Academic year','academicYear',m.academicYear,{scope})}</div>${field('Audience','audience',m.audience,{scope})}<label class="field">Editorial status<select data-publication="true" data-field="status">${P.statuses.map(status=>`<option ${status===m.status?'selected':''}>${status}</option>`).join('')}</select></label><details><summary>What does each editorial status mean?</summary><dl><dt>Draft</dt><dd>Work in progress. Not ready for review or distribution.</dd><dt>Ready for Review</dt><dd>Prepared for reviewer feedback or approval. Not authorized for distribution.</dd><dt>Approved</dt><dd>Approved and authorized for distribution through the established department process.</dd><dt>Distributed</dt><dd>Distribution has been completed. Retained as the publication record.</dd></dl><p class="hint">Changing status does not send email or bypass readiness checks. Generating a package does not change status.</p></details><details><summary>Edition timestamps</summary><p class="hint">Created: ${esc(m.createdAt)}<br>Updated: ${esc(m.updatedAt)}</p></details>`;}
 function editor(){return `<div class="editor-layout"><aside class="sidebar"><p class="eyebrow">Your edition</p><div class="section-row ${selected==='issue'?'selected':''}"><button data-select="issue">Edition details</button></div><p class="eyebrow" style="margin:26px 9px 10px">Publication modules</p><div class="section-list">${edition.sections.map((s,i)=>`<div class="section-row ${selected===s.id?'selected':''} ${s.enabled?'':'off'}"><button data-select="${esc(s.id)}">${esc(s.title)} <small>${s.cards.filter(c=>c.enabled).length||'—'}</small></button><div class="reorder"><button data-action="section-up" data-id="${esc(s.id)}" ${i===0?'disabled':''} aria-label="Move ${esc(s.title)} up">▲</button><button data-action="section-down" data-id="${esc(s.id)}" ${i===edition.sections.length-1?'disabled':''} aria-label="Move ${esc(s.title)} down">▼</button></div></div>`).join('')}</div><details><summary>Add a module</summary><label class="field">Available modules<select id="module-picker">${P.modules(edition.publicationType).filter(m=>!edition.sections.some(s=>s.id===m.id)).map(m=>`<option value="${esc(m.id)}">${esc(m.title)}</option>`).join('')}<option value="custom">Custom module</option></select></label><button data-action="add-module">Add module</button></details><p class="local-note">Edits are saved in this browser.<br>Use Editions to save online, or download Content JSON for a portable backup.</p><button data-action="import">Import edition JSON</button><input type="file" id="import-file" accept="application/json,.json" hidden></aside><section class="edit-panel" aria-label="Content editor">${selected==='issue'?issueEditor():sectionEditor()}</section>${previewPanel()}</div>`;}
@@ -121,12 +174,16 @@ async function initAccount(){if(!Auth){renderAccount();return;}
  Auth.onAuthChange((event,user)=>{account.user=user;renderAccount();if(view==='editor')render();});}
 function move(list,id,delta){const i=list.findIndex(x=>x.id===id),target=i+delta;if(i>=0&&target>=0&&target<list.length)[list[i],list[target]]=[list[target],list[i]];}
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||b.disabled)return;if(onlineBusy){toast('Please wait for the online operation to finish.');return;}if(b.dataset.view){view=b.dataset.view;render();if(view==='forms')forms.refresh();return;}if(b.dataset.select){selected=b.dataset.select;view='editor';render();return;}if(b.dataset.size){previewMode=b.dataset.size;render();return;}if(b.dataset.kind){previewKind=b.dataset.kind;render();return;}
-const action=b.dataset.action,id=b.dataset.id;
+const action=b.dataset.action,id=b.dataset.id||b.dataset.card;
 if(action==='form-suggest-categories'){forms.state.draft.content_categories=[...SubmissionForms.categories];render();return;}
 if(action?.startsWith('form-')){await forms.action(action,id);return;}
 if(action?.startsWith('destination-')){await registry.action(action,id);return;}
 if(action?.startsWith('online-')){await onlineAction(action,id);return;}
 try{switch(action){case'handoff-review':case'handoff-distribution':{const distribution=action==='handoff-distribution';const files=PrivateHandoff.makeFiles(edition,{distribution});download(S.exportBase(edition)+(distribution?'-distribution':'-review')+'.zip',S.zip(files),'application/zip');break;}
+case'editorial-link':await openEditorialLink(id);break;
+case'editorial-apply':applyEditorialLink();break;
+case'editorial-remove':applyEditorialLink(true);break;
+case'editorial-cancel':document.querySelector('#editorial-link-dialog').close();linkSelection=null;break;
 case'new':view='create';render();break;
 case'cancel-create':view='editor';render();break;
 case'create-letter':case'create-newsletter':if(!hasEdition||await confirmChange('Create a new publication?','This replaces the current browser working edition. Save it online from Editions or download Content JSON first to keep it. Online editions remain in the library.')){onlineRef=null;edition=S.createPublication(action==='create-letter'?'program-letter':'newsletter');hasEdition=true;selected='issue';view='editor';persist();render();}break;
@@ -156,11 +213,11 @@ case'open-email-preview':{const url=URL.createObjectURL(new Blob([emailDocument(
 case'copy-gmail':{const result=await EmailHandoff.copyRendered(EmailHandoff.emailFragment(emailDocument()),{clipboard:navigator.clipboard,ClipboardItem:window.ClipboardItem,Blob:window.Blob});const status=document.querySelector('#gmail-copy-status');status.textContent=result.mode==='rich'?'Formatted newsletter copied. Paste into Gmail Compose.':result.mode==='text'?'Rich HTML copying is unavailable. Plain text was copied; formatting will not be preserved.':'Clipboard access is unavailable. The plain-text fallback is selected below; press Ctrl+C (or ⌘C).';document.querySelector('#gmail-manual-fallback').hidden=result.mode!=='manual';if(result.mode==='manual'){const text=document.querySelector('#gmail-fallback-text');text.value=result.text;text.focus();text.select();}break;}
 
 case'import':document.querySelector('#import-file').click();break;
-}}catch(error){toast(error.message);}});
-document.addEventListener('input',e=>{const el=e.target;if(el.dataset.formField){forms.state.draft[el.dataset.formField]=el.type==='checkbox'?el.checked:el.value;return;}if(el.dataset.formTarget){const values=new Set(forms.state.draft.publication_targets);if(el.checked)values.add(el.dataset.formTarget);else values.delete(el.dataset.formTarget);forms.state.draft.publication_targets=[...values];return;}if(el.matches('[data-form-categories]')){forms.state.draft.content_categories=el.value.split(/\n/).map(v=>v.trim()).filter(Boolean);return;}if(el.dataset.destinationField){registry.state.draft[el.dataset.destinationField]=el.type==='checkbox'?el.checked:el.value;return;}if(!el.matches('[data-field]'))return;const key=el.dataset.field,value=el.type==='checkbox'?el.checked:el.value;
+}}catch(error){if(action?.startsWith('editorial-')&&document.querySelector('#editorial-link-dialog').open)document.querySelector('#editorial-link-status').textContent=error.message;else toast(error.message);}});
+document.addEventListener('input',e=>{const el=e.target;if(el.id==='editorial-link-search'){editorialOptions(el.value);return;}if(el.dataset.formField){forms.state.draft[el.dataset.formField]=el.type==='checkbox'?el.checked:el.value;return;}if(el.dataset.formTarget){const values=new Set(forms.state.draft.publication_targets);if(el.checked)values.add(el.dataset.formTarget);else values.delete(el.dataset.formTarget);forms.state.draft.publication_targets=[...values];return;}if(el.matches('[data-form-categories]')){forms.state.draft.content_categories=el.value.split(/\n/).map(v=>v.trim()).filter(Boolean);return;}if(el.dataset.destinationField){registry.state.draft[el.dataset.destinationField]=el.type==='checkbox'?el.checked:el.value;return;}if(!el.matches('[data-field]'))return;const key=el.dataset.field,value=el.type==='checkbox'?el.checked:el.value;
 if(el.dataset.publication){edition.publication[key]=value;}
 else if(el.dataset.link){const l=edition.links.find(l=>l.id===el.dataset.link);l[key]=value;if(key==='url'){l.approved=false;el.closest('.link-entry').querySelector('[type=checkbox]').checked=false;}if(key==='approved'&&value&&!S.https(l.url)){l.approved=false;el.checked=false;toast('Enter a valid HTTPS URL before confirming approval.');}}
-else if(el.dataset.card){const c=section().cards.find(c=>c.id===el.dataset.card);try{c[key]=key==='destination'?Destinations.select(edition,value,registry.state.rows):value;}catch(error){toast(error.message);render();return;}if(key!=='approved'&&key!=='enabled'){c.approved=false;const approval=el.closest('.card-editor').querySelector('[data-field=approved]');if(approval)approval.checked=false;}}
+else if(el.dataset.card){const c=section().cards.find(c=>c.id===el.dataset.card),previousBody=c.body;try{c[key]=key==='destination'?Destinations.select(edition,value,registry.state.rows):value;if(key==='body')S.updateBodyLinks(c,previousBody);}catch(error){toast(error.message);render();return;}if(key!=='approved'&&key!=='enabled'){c.approved=false;const approval=el.closest('.card-editor').querySelector('[data-field=approved]');if(approval)approval.checked=false;}}
 else if(key==='section-title')section().title=value;else edition.issue[key]=value;changed();if(el.dataset.publication){document.querySelector('#publication-context').textContent=P.label(edition)+' · '+edition.publication.status+' · '+edition.publication.title;}});
 document.addEventListener('change',async e=>{const el=e.target;if(el.matches('[data-field=externalSubmission]')){persist();render();return;}if(el.matches('[data-section-enabled]')){section().enabled=el.checked;persist();render();return;}
 if(el.matches('[data-link]')){persist();render();return;}

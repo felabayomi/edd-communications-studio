@@ -28,6 +28,29 @@ const activeSections=data=>data.sections.filter(s=>s.enabled&&s.cards.some(c=>c.
 const activeCards=data=>activeSections(data).flatMap(s=>s.cards.filter(c=>c.enabled).map(c=>({section:s,card:c})));
 const editionSlug=data=>`${data.issue.period}-${data.issue.year}`.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'untitled-edition';
 const placeholder=value=>/\b(placeholder|sample|lorem ipsum|tbd|todo)\b|\{\{[^}]+\}\}/i.test(value);
+function validBodyLinks(card){
+ const body=typeof card?.body==='string'?card.body:'',boundary=i=>i===0||i===body.length||!(/[\uD800-\uDBFF]/.test(body[i-1])&&/[\uDC00-\uDFFF]/.test(body[i]));
+ const ranges=(Array.isArray(card?.bodyLinks)?card.bodyLinks:[]).filter(r=>r&&typeof r==='object'&&Object.keys(r).every(k=>['start','end','destination'].includes(k))&&Number.isSafeInteger(r.start)&&Number.isSafeInteger(r.end)&&r.start>=0&&r.end>r.start&&r.end<=body.length&&typeof r.destination==='string'&&r.destination.trim()&&boundary(r.start)&&boundary(r.end)&&body.slice(r.start,r.end).trim()&&!/\n\s*\n/.test(body.slice(r.start,r.end))).map(({start,end,destination})=>({start,end,destination})).sort((a,b)=>a.start-b.start||a.end-b.end);
+ const breaks=[...body.matchAll(/\n\s*\n/g)],valid=[];for(const range of ranges)if(!breaks.some(m=>range.start<m.index+m[0].length&&range.end>m.index)&&(!valid.length||range.start>=valid[valid.length-1].end))valid.push(Object.freeze(range));
+ return Object.freeze(valid);
+}
+function updateBodyLinks(card,previousBody){
+ if(card.bodyLinks===undefined)return validBodyLinks(card);
+ const before=String(previousBody??''),after=card.body;let start=0,oldEnd=before.length,newEnd=after.length;
+ while(start<oldEnd&&start<newEnd&&before[start]===after[start])start++;
+ while(oldEnd>start&&newEnd>start&&before[oldEnd-1]===after[newEnd-1]){oldEnd--;newEnd--;}
+ const delta=newEnd-oldEnd;
+ card.bodyLinks=validBodyLinks({...card,body:before}).map(r=>r.end<=start?{...r}:r.start>=oldEnd?{...r,start:r.start+delta,end:r.end+delta}:{...r,start:Math.min(r.start,start),end:r.end>oldEnd?r.end+delta:newEnd});
+ card.bodyLinks=validBodyLinks(card).map(r=>({...r}));
+ return validBodyLinks(card);
+}
+function bodyInline(data,card){
+ let html='',position=0;for(const range of validBodyLinks(card)){
+  const link=data.links.find(l=>l.id===range.destination),text=escape(card.body.slice(range.start,range.end));
+  html+=escape(card.body.slice(position,range.start))+(link?.approved&&https(link.url)?`<a href="${escape(link.url)}" style="color:inherit;text-decoration:underline;overflow-wrap:anywhere">${text}</a>`:text);position=range.end;
+ }
+ return html+escape(card.body.slice(position));
+}
 function validate(data,today=new Date().toLocaleDateString('en-CA')){const results=[];const add=(level,message,detail='',section='')=>results.push({level,message,detail,section});
 if(data.issue.reviewNotice)add('error','Director-review mockup: not approved for distribution.','Use draft exports for review. Fictional stories and illustrative dates require replacement before publication.','issue');
 for(const key of ['period','year','issueDate','programName','degreeName','institutionName'])if(!String(data.issue[key]||'').trim())add('error',`Edition ${key.replace(/([A-Z])/g,' $1').toLowerCase()} is missing.`,'Complete edition details.','issue');
@@ -48,7 +71,10 @@ if(c.deadline&&c.deadline<today)add('warning',`${prefix}: deadline has passed.`,
 if(P.requiresApproval(s,c)&&!c.approved)add('error',`${prefix}: publication approval is not confirmed.`,'Confirm approval after reviewing the story and any image or quotation.',s.id);
 if((c.buttonLabel||c.destination)&&(!c.buttonLabel.trim()||!c.destination))add('error',`${prefix}: CTA needs a label and destination.`,'Select a library destination and enter meaningful button text.',s.id);
 if(c.buttonLabel&&/^(click here|here|link)$/i.test(c.buttonLabel.trim()))add('error',`${prefix}: use a descriptive button label.`,'For example, “View program calendar”.',s.id);
-if(c.destination){const l=data.links.find(x=>x.id===c.destination);if(!l||!l.approved||!https(l.url))add('error',`${prefix}: destination is pending or invalid.`,'Supply an HTTPS URL in the link library and confirm it is approved.',s.id);else linkCount++;}
+if(c.destination){const l=data.links.find(x=>x.id===c.destination);if(l?.editorialRegistry===true)add('error',`${prefix}: card destination aliases an editorial link.`,'Reselect a card destination to preserve its saved snapshot.',s.id);if(!l||!l.approved||!https(l.url))add('error',`${prefix}: destination is pending or invalid.`,'Supply an HTTPS URL in the link library and confirm it is approved.',s.id);else linkCount++;}
+ const bodyLinks=validBodyLinks(c);
+ if(c.bodyLinks!==undefined&&(!Array.isArray(c.bodyLinks)||bodyLinks.length!==c.bodyLinks.length))add('error',`${prefix}: editorial link ranges are invalid.`,'Remove or repair invalid text selections.',s.id);
+ for(const range of bodyLinks){const link=data.links.find(l=>l.id===range.destination);if(!link?.approved||!https(link.url))add('error',`${prefix}: editorial destination is pending or invalid.`,'Refresh Approved Destinations or remove the editorial link.',s.id);else linkCount++;}
 if(c.imageUrl||c.localImage){imageCount++;if(!c.imageAlt.trim())add('error',`${prefix}: image alt text is missing.`,'Describe the image for readers using assistive technology.',s.id);
 if(c.imageUrl&&!https(c.imageUrl))add('error',`${prefix}: image URL must use HTTPS.`,'',s.id);
 if(c.localImage&&!c.imageUrl)add('error',`${prefix}: local image needs a hosted HTTPS URL for email.`,'Local images are available in draft web previews only. Sign in and choose Host image for email, or enter a hosted HTTPS image URL.',s.id);
@@ -60,11 +86,11 @@ add('success',`${activeCards(data).length} enabled content card${activeCards(dat
 add('info',`${linkCount} approved HTTPS link reference${linkCount===1?'':'s'} configured.`,'URL format and approval checked; live availability is not checked.');
 if(!results.some(r=>r.message.includes('alt text is missing')))add('success',imageCount?`All ${imageCount} images have alt text.`:'No images in this edition.');
 return results;}
-function linksUsed(data){return data.links.filter(l=>activeCards(data).some(({card})=>card.destination===l.id)).map(l=>({...l,usedBy:activeCards(data).filter(({card})=>card.destination===l.id).map(({section,card})=>({section:section.title,title:card.title})),availability:'Not checked'}));}
+function linksUsed(data){const uses=(card,id)=>card.destination===id||validBodyLinks(card).some(r=>r.destination===id);return data.links.filter(l=>activeCards(data).some(({card})=>uses(card,l.id))).map(l=>({...l,usedBy:activeCards(data).filter(({card})=>uses(card,l.id)).map(({section,card})=>({section:section.title,title:card.title})),availability:'Not checked'}));}
 function assetsUsed(data){return activeCards(data).filter(({card})=>card.imageUrl||card.localImage).map(({section,card})=>({section:section.title,title:card.title,url:card.imageUrl||'[local preview image]',alt:card.imageAlt,emailReady:https(card.imageUrl)}));}
-const paragraphs=value=>escape(value).split(/\n\s*\n/).map(v=>`<p style="margin:0 0 16px;line-height:1.7">${v.replace(/\n/g,'<br>')}</p>`).join('');
+const paragraphs=(value,inline=escape(value))=>inline.split(/\n\s*\n/).map(v=>`<p style="margin:0 0 16px;line-height:1.7">${v.replace(/\n/g,'<br>')}</p>`).join('');
 function cardMarkup(data,c,email){const dest=data.links.find(l=>l.id===c.destination),url=dest&&dest.approved&&https(dest.url)?dest.url:'',src=imageSource(c.imageUrl||c.localImage,email);
-return `${src?`<img src="${escape(src)}" alt="${escape(c.imageAlt)}" width="584" style="display:block;width:100%;max-width:584px;height:auto;border:0;margin:0 0 22px">`:''}${c.label||c.date||c.deadline?`<p style="font:700 12px/1.6 Arial,sans-serif;letter-spacing:1px;color:${tokens.accent};margin:0 0 10px">${escape([c.label,c.date,c.deadline?'Deadline: '+c.deadline:''].filter(Boolean).join(' · '))}</p>`:''}<h3 style="font:normal 26px/1.25 Georgia,serif;color:${tokens.ink};margin:0 0 15px">${escape(c.title)}</h3>${c.author?`<p style="font:700 14px/1.5 Arial,sans-serif;margin:0 0 18px;color:${tokens.muted}">${escape(c.author)}</p>`:''}${c.body?paragraphs(c.body):''}${c.quote?`<blockquote style="margin:22px 0;padding:4px 0 4px 20px;border-left:3px solid ${tokens.accent};font:italic 22px/1.5 Georgia,serif;color:${tokens.accent}">${escape(c.quote)}</blockquote>`:''}${c.buttonLabel?(url?`<table role="presentation" border="0" cellspacing="0" cellpadding="0" style="margin-top:20px"><tr><td bgcolor="${tokens.accent}" style="padding:12px 20px;border-radius:3px"><a href="${escape(url)}" style="font:bold 14px/1.5 Arial,sans-serif;color:#ffffff;text-decoration:none">${escape(c.buttonLabel)} ↗</a></td></tr></table>`:`<p style="font:14px/1.6 Arial,sans-serif;color:#885607">${escape(c.buttonLabel)} · destination pending</p>`):''}`;}
+return `${src?`<img src="${escape(src)}" alt="${escape(c.imageAlt)}" width="584" style="display:block;width:100%;max-width:584px;height:auto;border:0;margin:0 0 22px">`:''}${c.label||c.date||c.deadline?`<p style="font:700 12px/1.6 Arial,sans-serif;letter-spacing:1px;color:${tokens.accent};margin:0 0 10px">${escape([c.label,c.date,c.deadline?'Deadline: '+c.deadline:''].filter(Boolean).join(' · '))}</p>`:''}<h3 style="font:normal 26px/1.25 Georgia,serif;color:${tokens.ink};margin:0 0 15px">${escape(c.title)}</h3>${c.author?`<p style="font:700 14px/1.5 Arial,sans-serif;margin:0 0 18px;color:${tokens.muted}">${escape(c.author)}</p>`:''}${c.body?paragraphs(c.body,bodyInline(data,c)):''}${c.quote?`<blockquote style="margin:22px 0;padding:4px 0 4px 20px;border-left:3px solid ${tokens.accent};font:italic 22px/1.5 Georgia,serif;color:${tokens.accent}">${escape(c.quote)}</blockquote>`:''}${c.buttonLabel?(url?`<table role="presentation" border="0" cellspacing="0" cellpadding="0" style="margin-top:20px"><tr><td bgcolor="${tokens.accent}" style="padding:12px 20px;border-radius:3px"><a href="${escape(url)}" style="font:bold 14px/1.5 Arial,sans-serif;color:#ffffff;text-decoration:none">${escape(c.buttonLabel)} ↗</a></td></tr></table>`:`<p style="font:14px/1.6 Arial,sans-serif;color:#885607">${escape(c.buttonLabel)} · destination pending</p>`):''}`;}
 // Program Letter magazine theme. Presentation only: the same text, links, order and visibility as the shared renderer.
 // Email and standalone HTML share the table-based compositions below; a media query stacks columns on phones.
 // Colour lives in section bands, headings, rules, badges, date tiles and buttons; reading text sits on paper surfaces in dark ink.
@@ -80,7 +106,7 @@ function letterTheme(id){const t=letterTokens,[bg,accent]=letterPalette[id]||[t.
 const letterSerif="Georgia,'Times New Roman',serif",letterSans='Arial,Helvetica,sans-serif',letterMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const letterTable=(rows,attrs='')=>`<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0"${attrs}>${rows}</table>`;
 const letterRule=(width,color,margin,center=false)=>`<table role="presentation"${center?' align="center"':''} border="0" cellspacing="0" cellpadding="0" style="margin:${margin}"><tr><td width="${width}" height="2" bgcolor="${color}" style="width:${width}px;height:2px;font-size:0;line-height:0">&nbsp;</td></tr></table>`;
-const letterParagraphs=(value,style,cls='l-p')=>{const list=escape(value).split(/\n\s*\n/);return list.map((v,i)=>`<p${cls?` class="${cls}"`:''} style="margin:0 0 ${i===list.length-1?0:12}px;${style}">${v.replace(/\n/g,'<br>')}</p>`).join('');};
+const letterParagraphs=(value,style,cls='l-p',inline=escape(value))=>{const list=inline.split(/\n\s*\n/);return list.map((v,i)=>`<p${cls?` class="${cls}"`:''} style="margin:0 0 ${i===list.length-1?0:12}px;${style}">${v.replace(/\n/g,'<br>')}</p>`).join('');};
 const letterSurface=(content,s,{pad='28px 30px',edge='',cls='l-pad'}={})=>letterTable(`<tr><td class="${cls}" bgcolor="${s.paper}" style="padding:${pad};background-color:${s.paper};border:1px solid ${s.line};${edge}">${content}</td></tr>`);
 function letterDate(value){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(value||'');return m&&+m[2]>=1&&+m[2]<=12?{month:letterMonths[m[2]-1],day:String(+m[3]),year:m[1]}:null;}
 const letterMeta=(c,withDate=true)=>[c.label,withDate?c.date:'',c.deadline?'Deadline: '+c.deadline:''].filter(Boolean).join(' · ');
@@ -96,7 +122,7 @@ return {image:src?`<img src="${escape(src)}" alt="${escape(c.imageAlt)}" width="
 meta:meta?`<p style="margin:0 0 8px;${align}font:bold 12px/1.5 ${letterSans};letter-spacing:1.4px;text-transform:uppercase;color:${s.accent}">${escape(meta)}</p>`:'',
 title:`<h3 class="l-t${size}" style="margin:0 0 ${c.author?6:12}px;${align}font:${italic?'italic':'normal'} normal ${size}px/1.25 ${letterSerif};color:${s.heading}">${escape(c.title)}</h3>`,
 author:c.author?`<p style="margin:0 0 14px;${align}font:italic 15px/1.5 ${letterSerif};color:${s.muted}">${escape(c.author)}</p>`:'',
-body:c.body?letterParagraphs(c.body,`${align}font:${body}px/1.6 ${letterSans};color:${s.text}`):'',
+body:c.body?letterParagraphs(c.body,`${align}font:${body}px/1.6 ${letterSans};color:${s.text}`,'l-p',bodyInline(data,c)):'',
 quote:c.quote?`<blockquote style="margin:22px 0 0;padding:16px 0;border-top:1px solid ${s.accent};border-bottom:1px solid ${s.accent};${align}font:italic 21px/1.5 ${letterSerif};color:${s.heading}">${escape(c.quote).replace(/\n/g,'<br>')}</blockquote>`:'',
 button:letterButton(c,url,s,{outline,center})};}
 function letterBlock(data,c,kind,email,th){const s=th.surface;
@@ -145,6 +171,17 @@ function zip(files){const encoder=new TextEncoder(),parts=[],central=[];let offs
 for(const [name,value] of Object.entries(files)){const n=encoder.encode(name),b=encoder.encode(value),sum=crc(b),h=new Uint8Array(30+n.length),v=new DataView(h.buffer);v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x800,true);v.setUint16(12,33,true);v.setUint32(14,sum,true);v.setUint32(18,b.length,true);v.setUint32(22,b.length,true);v.setUint16(26,n.length,true);h.set(n,30);parts.push(h,b);const d=new Uint8Array(46+n.length),w=new DataView(d.buffer);w.setUint32(0,0x02014b50,true);w.setUint16(4,20,true);w.setUint16(6,20,true);w.setUint16(8,0x800,true);w.setUint16(14,33,true);w.setUint32(16,sum,true);w.setUint32(20,b.length,true);w.setUint32(24,b.length,true);w.setUint16(28,n.length,true);w.setUint32(42,offset,true);d.set(n,46);central.push(d);offset+=h.length+b.length;}
 const end=new Uint8Array(22),v=new DataView(end.buffer),size=central.reduce((sum,p)=>sum+p.length,0);v.setUint32(0,0x06054b50,true);v.setUint16(8,central.length,true);v.setUint16(10,central.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);const all=[...parts,...central,end],out=new Uint8Array(all.reduce((sum,p)=>sum+p.length,0));let pos=0;for(const p of all){out.set(p,pos);pos+=p.length;}return out;}
 function parseEdition(text){const d=JSON.parse(text);if(d?.schemaVersion!==1||!d.issue||!Array.isArray(d.sections)||!Array.isArray(d.links))throw new Error('Not a supported Studio edition (schemaVersion 1).');const base=createEdition(false);for(const k of Object.keys(base.issue))if(typeof d.issue[k]!=='string')throw new Error(`Invalid edition field: ${k}`);for(const key of ['logoUrl','logoAlt','reviewNotice'])if(d.issue[key]!==undefined&&typeof d.issue[key]!=='string')throw new Error('Invalid optional edition field: '+key);if(d.sections.length>100||d.links.length>500)throw new Error('Edition exceeds prototype limits.');const seen=new Set();for(const s of d.sections){if(!s||typeof s.id!=='string'||!s.id||seen.has(s.id)||typeof s.title!=='string'||typeof s.enabled!=='boolean'||!Array.isArray(s.cards))throw new Error('Invalid or duplicate section.');seen.add(s.id);if(s.cards.length>500)throw new Error('Too many cards.');for(const c of s.cards){for(const [k,v] of Object.entries(newCard()))if(typeof c[k]!==typeof v)throw new Error(`Invalid card field: ${k}`);if(c.externalSubmission!==undefined&&typeof c.externalSubmission!=='boolean')throw new Error('Invalid submission review flag.');if(!types.includes(c.type)||seen.has(c.id))throw new Error('Invalid card type or duplicate ID.');seen.add(c.id);if(c.localImage&&!imageSource(c.localImage))throw new Error('Unsupported local image.');}}const linkIds=new Set();for(const l of d.links){if(!l||typeof l.id!=='string'||!l.id||linkIds.has(l.id)||typeof l.label!=='string'||typeof l.url!=='string'||typeof l.approved!=='boolean')throw new Error('Invalid link entry.');linkIds.add(l.id);}return P.normalize(d);}
-const api={titles,ids,types,tokens,escape,https,imageSource,newCard,createEdition,createPublication,exportBase,activeSections,activeCards,editionSlug,validate,linksUsed,assetsUsed,render,makeFiles,zip,parseEdition};
+function parseBodyEdition(text){
+ const data=parseEdition(text);
+ for(const link of data.links)if(link.editorialRegistry!==undefined&&(typeof link.editorialRegistry!=='boolean'||(link.editorialRegistry&&(typeof link.registryId!=='string'||!link.registryId))))throw new Error('Invalid editorial registry metadata.');
+ for(const section of data.sections)for(const card of section.cards){
+  if(data.links.some(link=>link.id===card.destination&&link.editorialRegistry===true))throw new Error('Editorial registry links cannot be card destination snapshots.');
+  if(card.bodyLinks===undefined)continue;
+  if(!Array.isArray(card.bodyLinks)||validBodyLinks(card).length!==card.bodyLinks.length)throw new Error('Invalid editorial link ranges.');
+  for(const range of validBodyLinks(card)){const link=data.links.find(l=>l.id===range.destination);if(!link||(link.url&&!https(link.url)))throw new Error('Invalid editorial link destination.');}
+ }
+ return data;
+}
+const api={titles,ids,types,tokens,escape,https,imageSource,newCard,createEdition,createPublication,exportBase,activeSections,activeCards,editionSlug,validate,linksUsed,assetsUsed,validBodyLinks,updateBodyLinks,render,makeFiles,zip,parseEdition:parseBodyEdition};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Studio=api;
 })(typeof window!=='undefined'?window:this);
