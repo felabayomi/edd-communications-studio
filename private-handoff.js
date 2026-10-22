@@ -13,6 +13,14 @@ function makeFiles(data,{distribution=false}={}){
  const email=S.render(data,{email:true,draft:!distribution});
  return {[prefix+'.html']:S.render(data,{draft:!distribution}),[prefix+'-email.html']:email,'OPEN-TO-COPY.html':Copy.makePage(email,data),'HANDOFF.txt':instructions};
 }
+// Edition Bundle: the standard export files plus the same standalone Gmail copy page used by handoff packages.
+function bundleFiles(data,{draft=false}={}){
+ const files=S.makeFiles(data,{draft}),prefix=S.exportBase(data)+(draft?'-draft':''),status=data.publication.status;
+ // A draft bundle is never distribution-ready, so its page instructions use review language even for an Approved edition.
+ const pageData=draft&&['Approved','Distributed'].includes(status)?{...data,publication:{...data.publication,status:'Draft'}}:data;
+ files['README.txt']=files['README.txt'].replace(`- ${prefix}.html:`,`- OPEN-TO-COPY.html: open in Chrome or Edge to review the formatted publication and copy it into Gmail (no sign-in required)\n- ${prefix}.html:`);
+ return {'OPEN-TO-COPY.html':Copy.makePage(files[prefix+'-email.html'],pageData),...files};
+}
 function view(data){const c=eligibility(data),esc=S.escape,status=data.publication.status;
  const archived=status==='Distributed',approved=status==='Approved';
  const label=archived?'Generate Archival Copy':approved?'Generate Distribution Package':'Generate Review Package';
@@ -20,5 +28,5 @@ function view(data){const c=eligibility(data),esc=S.escape,status=data.publicati
  const guidance=archived?'Distribution has been completed. A new distribution handoff is not normally required; generate a copy only when needed for reference or authorized reuse.':approved?'Give the package to the authorized sender. The sender opens OPEN-TO-COPY.html, uses Copy for Gmail, and checks formatting, links, dates, images, content, subject, and recipients before sending through the established department process.':'Send the review package through the established review process. Apply returned corrections and generate revised review packages as needed until the reviewer gives approval.';
  return `<section class="content-page"><p class="eyebrow">Editorial workflow</p><h1>Publication Handoff</h1><div class="banner"><strong>${esc(status)}</strong> · ${c.blockers.length} readiness blocker(s)<br>Planned distribution date: ${esc(data.issue.issueDate)}<br>Set or confirm during final review before distribution.</div><div class="export-grid"><article class="export-card wide"><h2>${label}</h2><p>${description}</p><button data-action="${c.approved?'handoff-distribution':'handoff-review'}" ${c.approved&&!c.ready?'disabled':''}>${label}</button><button data-view="readiness">Review readiness</button><p class="hint">Generating a package does not change editorial status or send email. Readiness checks remain required for approved and archival packages.</p></article><article class="export-card wide"><h2>Next steps</h2><p>${guidance}</p><p>Each package includes OPEN-TO-COPY.html, a browser-viewable publication, email-safe HTML, and HANDOFF.txt instructions. Share files through an approved private channel.</p><p class="hint">Gmail may modify formatting. Remote images require internet access.</p><button data-view="export">Open editor export / Copy for Gmail</button></article></div></section>`;
 }
-const api={eligibility,makeFiles,view};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PrivateHandoff=api;
+const api={eligibility,makeFiles,bundleFiles,view};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PrivateHandoff=api;
 })(typeof window!=='undefined'?window:this);

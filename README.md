@@ -26,7 +26,7 @@ Open http://127.0.0.1:4173. Keep the terminal running while using the applicatio
 4. Confirm link approval in the library. Changing a URL clears its approval. Student and alumni stories require publication approval; changing card content clears that approval.
 5. Preview at desktop or mobile width, with separate Web and Email renderers.
 6. Open Readiness for checks derived from the current edition. Empty sections are excluded, not blockers. Disabled sections and cards are excluded from validation and rendering.
-7. Export a final bundle when blockers are resolved. A labeled draft bundle, editable Content JSON, and Links-used JSON remain available at any time. Copy HTML follows the selected format and includes the draft banner while blocked.
+7. Export a final bundle when blockers are resolved. Every bundle (final or draft) includes OPEN-TO-COPY.html, which opens without signing in and copies the formatted publication into Gmail. A labeled draft bundle, editable Content JSON, and Links-used JSON remain available at any time. Copy HTML follows the selected format and includes the draft banner while blocked.
 8. Save Content JSON as a backup. Import it to resume an edition or move it to another browser. New edition replaces the current local draft only after confirmation.
 
 The ZIP contains `output/<edition>/edd-newsletter-<edition>.html`, the separate `-email.html`, `content.json`, `links-used.json`, and `README.txt`. Draft HTML filenames also contain `-draft`. ZIPs are created entirely in the browser. The browser downloads them to its configured Downloads location; it does not silently write to an arbitrary filesystem folder.
