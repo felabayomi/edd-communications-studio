@@ -75,14 +75,19 @@ const letterParagraphs=(value,style,cls='l-p')=>{const list=escape(value).split(
 const letterMeta=c=>[c.label,c.date,c.deadline?'Deadline: '+c.deadline:''].filter(Boolean).join(' · ');
 // Pair independent entries in supporting sections, without excluding substantial editorial text.
 const letterPairable=c=>['event','resource','announcement','opportunity'].includes(c.type)&&!c.quote&&!c.imageUrl&&!c.localImage;
-function letterBlock(data,c,email,{editorial=false,closing=false,paired=false}={}){const t=letterTokens,dest=data.links.find(l=>l.id===c.destination),url=dest&&dest.approved&&https(dest.url)?dest.url:'',src=imageSource(c.imageUrl||c.localImage,email),meta=letterMeta(c);
+function letterBlock(data,c,email,{editorial=false,closing=false,paired=false,besideImage=false}={}){const t=letterTokens,dest=data.links.find(l=>l.id===c.destination),url=dest&&dest.approved&&https(dest.url)?dest.url:'',src=imageSource(c.imageUrl||c.localImage,email),meta=letterMeta(c);
  const image=src?`<img src="${escape(src)}" alt="${escape(c.imageAlt)}" width="480" border="0" style="display:block;width:100%;max-width:480px;height:auto;border:0;-ms-interpolation-mode:bicubic;margin:0 auto 16px">`:'';
  const heading=`${meta?`<p style="margin:0 0 6px;font:bold 14px/1.5 ${letterSans};color:${t.muted}">${escape(meta)}</p>`:''}<h3 style="margin:0 0 10px;font:bold ${email&&paired?'20px/1.3':'24px/1.25'} ${letterSerif};color:${t.teal}">${escape(c.title)}</h3>`;
  const body=c.body?letterParagraphs(c.body,`font:17px/1.6 ${letterSans};color:${t.ink}`):'';
  const text=`${c.author?`<p style="margin:0 0 10px;font:16px/1.5 ${letterSans};color:${t.muted}">${escape(c.author)}</p>`:''}${!email&&body?`<div class="${editorial?'l-editorial':'l-prose'}">${body}</div>`:body}${c.quote?`<blockquote style="margin:16px 0 0;padding:0 0 0 14px;border-left:2px solid ${t.gold};font:italic 18px/1.6 ${letterSerif};color:${t.ink}">${escape(c.quote).replace(/\n/g,'<br>')}</blockquote>`:''}${c.buttonLabel?`<p style="margin:12px 0 0;font:bold 16px/1.5 ${letterSans}">${url?`<a href="${escape(url)}" style="color:${t.teal};text-decoration:underline">${escape(c.buttonLabel)} ↗</a>`:`<span style="color:#885607">${escape(c.buttonLabel)} · destination pending</span>`}</p>`:''}`;
- if(email)return `${image}${heading}${text}`;
+ if(email)return besideImage?letterEmailImage(`${heading}${text}`,src,c.imageAlt):`${image}${heading}${text}`;
  const beside=src&&c.type!=='leadership'&&!c.quote;
  return `<article data-letter-card="${escape(c.id)}" class="l-card${beside?' l-image-card':''}${editorial?' l-chair':''}${closing?' l-closing':''}${c.type==='spotlight'?' l-spotlight':''}">${heading}${beside?`<div class="l-image-layout"><div>${image}</div><div>${text}</div></div>`:`${image}${text}`}</article>`;
+}
+function letterEmailImage(article,src,alt){
+ const image=`<a href="${escape(src)}" style="display:block;text-decoration:none"><img src="${escape(src)}" alt="${escape(alt)}" width="272" border="0" style="display:block;width:100%;max-width:272px;height:auto;border:0;-ms-interpolation-mode:bicubic;margin:0 auto"></a>`;
+ const column=(content,width)=>`<div class="letter-email-image-column" style="display:inline-block;width:100%;max-width:${width}px;vertical-align:top;text-align:left">${letterTable(`<tr><td style="padding:0 6px;font:17px/1.6 ${letterSans};color:${letterTokens.ink};overflow-wrap:anywhere;word-break:break-word">${content}</td></tr>`,' style="table-layout:fixed"')}</div>`;
+ return letterTable(`<tr><td align="left" style="font-size:0;line-height:0"><!--[if mso]><table role="presentation" width="632" border="0" cellspacing="0" cellpadding="0"><tr><td width="348" valign="top"><![endif]-->${column(article,348)}<!--[if mso]></td><td width="284" valign="top"><![endif]-->${column(image,284)}<!--[if mso]></td></tr></table><![endif]--></td></tr>`,' class="letter-email-image" style="table-layout:fixed"');
 }
 function letterEmailPair(data,cards){const columns=cards.map(c=>`<div class="letter-email-column" style="display:inline-block;width:100%;max-width:316px;vertical-align:top;text-align:left">${letterTable(`<tr><td style="padding:0 6px 16px;font:17px/1.6 ${letterSans};color:${letterTokens.ink};overflow-wrap:anywhere;word-break:break-word">${letterBlock(data,c,true,{paired:true})}</td></tr>`,' style="table-layout:fixed"')}</div>`);
  // Ghost cells size the same content in classic Outlook; other clients wrap the inline blocks without head CSS.
@@ -90,7 +95,7 @@ function letterEmailPair(data,cards){const columns=cards.map(c=>`<div class="let
 }
 function letterSection(data,s,email){const t=letterTokens,cards=s.cards.filter(c=>c.enabled),heading=`<h2 style="margin:0 0 18px;padding-top:18px;border-top:1px solid ${t.gold};font:bold 28px/1.25 ${letterSerif};color:${t.teal}">${escape(s.title)}</h2>`;
  if(email){const rows=[],pairSection=['events','resources','dissertation','reminders'].includes(s.id);
-  for(let i=0;i<cards.length;i++){const at=i,paired=pairSection&&letterPairable(cards[i])&&cards[i+1]&&letterPairable(cards[i+1]),content=paired?letterEmailPair(data,[cards[i],cards[++i]]):letterBlock(data,cards[i],true);
+  for(let i=0;i<cards.length;i++){const at=i,paired=pairSection&&letterPairable(cards[i])&&cards[i+1]&&letterPairable(cards[i+1]),content=paired?letterEmailPair(data,[cards[i],cards[++i]]):letterBlock(data,cards[i],true,{besideImage:s.id==='updates'&&cards[i].type==='resource'&&!!imageSource(cards[i].imageUrl||cards[i].localImage,true)});
    rows.push(`<tr><td style="padding:${at?18:0}px 0 ${paired?0:16}px;${at?`border-top:1px solid ${t.line};`:''}overflow-wrap:anywhere;word-break:break-word">${content}</td></tr>`);
   }
   return `<tr><td style="padding:12px 24px;background-color:${t.paper};overflow-wrap:anywhere;word-break:break-word">${heading}${letterTable(rows.join(''),' style="table-layout:fixed"')}</td></tr>`;

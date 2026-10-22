@@ -100,7 +100,7 @@ test('approved web magazine output stays byte-for-byte unchanged for six section
  assert.doesNotMatch(S.render(d),/20px\/1.3/);
  assert.equal((fragment.match(/<h3 /g)||[]).length,11);
  assert.equal((fragment.match(/<h2 /g)||[]).length,6);
- assert.match(fragment,/src="https:\/\/example.org\/guide.png" alt="Guide checklist" width="480"/);
+ assert.match(fragment,/href="https:\/\/example.org\/guide.png"[^>]*><img src="https:\/\/example.org\/guide.png" alt="Guide checklist" width="272"/);
  let at=-1;for(const s of d.sections)for(const c of s.cards){const next=fragment.indexOf(S.escape(c.title),at+1);assert(next>at);at=next;assert.equal(fragment.split(S.escape(c.title)).length-1,1);}
  assert.equal(JSON.stringify(d),before);
 });
@@ -120,6 +120,32 @@ test('email keeps images, quotes, leadership, disabled entries and unsupported s
  s.cards=['One','Disabled','Two','Odd last'].map(title=>({...S.newCard('event'),title,body:'Text',enabled:title!=='Disabled'}));
  const email=S.render(d,{email:true});assert.equal((email.match(/class="letter-email-pair"/g)||[]).length,1);
  assert.doesNotMatch(email,/Disabled/);assert.match(email,/<\/div><!--\[if mso\]><\/td><\/tr><\/table><!\[endif\]-->[\s\S]*Odd last/);
+});
+
+test('civic resource email places the complete article before a linked proportional guide in hybrid columns',async()=>{
+ const C=require('../standalone-copy'),P=require('../private-handoff'),d=S.createPublication('program-letter'),s=d.sections.find(s=>s.id==='updates');
+ const url='https://example.org/voter%20guide.png?edition=fall&year=2026',alt='Voter checklist & QR code';
+ const c={...S.newCard('resource'),title:'Reflection & the November Elections',body:'Opening paragraph.\n\nComplete closing paragraph.',date:'2026-11-03',author:'Program office',label:'Election reminder',destination:'hub',buttonLabel:'Read more',imageUrl:url,imageAlt:alt};
+ s.cards=[c,{...S.newCard('spotlight'),title:'Student Spotlight',body:'Student story.',destination:'hub',buttonLabel:'Student link'}];
+ const before=JSON.stringify(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email),web=S.render(d);
+ assert.equal((fragment.match(/class="letter-email-image"/g)||[]).length,1);
+ assert.match(fragment,/max-width:348px/);assert.match(fragment,/max-width:284px/);
+ assert.match(fragment,/width="348" valign="top"/);assert.match(fragment,/width="284" valign="top"/);
+ assert.match(fragment,/width="272"[^>]*width:100%;max-width:272px;height:auto/);
+ assert(fragment.includes(`<a href="${S.escape(url)}" style="display:block;text-decoration:none"><img src="${S.escape(url)}" alt="${S.escape(alt)}"`));
+ for(const value of [c.title,c.date,c.author,c.label,...c.body.split('\n\n'),c.buttonLabel]){
+  assert.equal(fragment.split(S.escape(value)).length-1,1);assert(fragment.indexOf(S.escape(value))<fragment.indexOf('<img '));
+ }
+ assert(fragment.indexOf('<img ')<fragment.indexOf('Student Spotlight'));
+ assert.match(fragment,/font:bold 24px\/1.25/);assert.doesNotMatch(fragment,/@media|display:grid|display:flex|object-fit|overflow:hidden/);
+ assert.doesNotMatch(web,/letter-email-image/);assert.match(web,/width="480"/);
+ for(const page of [C.makePage(email,d),P.bundleFiles(d,{draft:true})['OPEN-TO-COPY.html'],P.makeFiles(d)['OPEN-TO-COPY.html']])assert(page.includes('<main id="publication">'+fragment+'</main>'));
+ let parts;class Item{constructor(data){parts=data;}}
+ await H.copyRendered(fragment,{clipboard:{write:async()=>{}},ClipboardItem:Item,Blob});
+ assert.equal(await parts['text/html'].text(),fragment);
+ assert.equal(await parts['text/plain'].text(),H.plainText(fragment));assert.equal(JSON.stringify(d),before);
+ c.imageUrl='javascript:alert(1)';assert.doesNotMatch(S.render(d,{email:true}),/letter-email-image|href="javascript:/);
+ c.imageUrl=url;c.type='spotlight';assert.doesNotMatch(S.render(d,{email:true}),/class="letter-email-image"/);
 });
 
 test('web supporting sections pair substantial entries without changing order or pairing images, quotes or leadership cards',()=>{
