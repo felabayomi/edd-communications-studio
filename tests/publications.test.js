@@ -252,3 +252,39 @@ test('web Program Letter adds restrained teal, sage and cream treatments while k
  assert.match(web,/<img src="https:\/\/example.org\/spot.jpg" alt="Student photo"/);
  assert.doesNotMatch(S.render(d,{email:true}),/#EEF3EE|l-image-card/);
 });
+
+test('every image, editorial link and button stays with its own card in web, email, Gmail fragment and export',()=>{
+ const spot='https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/in-the-spotlight-our-edd-students-21a343b5b6d84c61b3394b0a799815e2.jpg';
+ const flyer='https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/october-24th-community-gathering-flyer-f-5e9286328bb84315b722211f8468ccee.png';
+ const guide='https://example.org/voter-guide.png';
+ const d=S.createPublication('program-letter');
+ const url=id=>`https://example.org/${id}`;
+ d.links=['elect','story','submit','zoom','lib','support','center','aid'].map(id=>({id,label:id,url:url(id),approved:true,source:'test'}));
+ const card=(type,title,extra={})=>({...S.newCard(type),title,body:`${title} body text.`,approved:true,...extra});
+ const plan={
+  updates:[card('resource','Reflection & the November Elections',{imageUrl:guide,imageAlt:'Voter guide',buttonLabel:'Official election resources',destination:'elect'}),
+   card('spotlight','In the Spotlight: Our EdD Students',{body:'Read the Student Spotlight today.',imageUrl:spot,imageAlt:'Spotlight photo',buttonLabel:'Submit Your EdD Story',destination:'submit',bodyLinks:[{start:0,end:'Read the Student Spotlight'.length,destination:'story'}]})],
+  events:[card('event','Community Co-working & Café',{imageUrl:flyer,imageAlt:'Café flyer',buttonLabel:'Join the Café',destination:'zoom'}),
+   card('event','Being Together: An EdD Community Evening')],
+  resources:[card('resource','Library, Writing & Dissertation Support',{buttonLabel:'Library links',destination:'lib'}),card('resource','Student Support & EdD Community Center',{buttonLabel:'Student support links',destination:'support'})],
+  registration:[card('announcement','Spring 2027 Planning',{buttonLabel:'Community Center',destination:'center'}),card('announcement','Financial Aid',{buttonLabel:'Aid details',destination:'aid'})]};
+ for(const s of d.sections)s.cards=plan[s.id]||[];
+ const cards=d.sections.flatMap(s=>s.cards).filter(Boolean),title=c=>`>${S.escape(c.title)}</h3>`;
+ const owned=c=>[c.imageUrl,c.destination&&url(c.destination),...(c.bodyLinks||[]).map(r=>url(r.destination))].filter(Boolean);
+ const all=['elect','story','submit','zoom','lib','support','center','aid'].map(url).concat(guide,spot,flyer);
+ const web=S.render(d),email=S.render(d,{email:true}),fragment=H.emailFragment(email);
+ for(const c of cards){
+  const m=web.match(new RegExp(`<article data-letter-card="${c.id}"[\\s\\S]*?</article>`));assert(m,c.title);
+  for(const u of all)assert.equal(m[0].includes(`"${u}"`),owned(c).includes(u),`web ${c.title} ${u}`);
+ }
+ for(const html of [email,fragment]){
+  const at=cards.map(c=>html.indexOf(title(c)));
+  cards.forEach((c,i)=>{const lo=i?at[i-1]:-1,hi=i<cards.length-1?at[i+1]:Infinity;
+   for(const u of owned(c)){const p=html.indexOf(`"${u}"`);assert(p>lo&&p<hi,`email ${c.title} ${u}`);assert(u===c.imageUrl||p>at[i],`${c.title} link below text`);}});
+ }
+ const w=S.validate(d).filter(r=>r.message.includes('preview deploy'));assert.equal(w.length,2);
+ assert.match(S.render(d,{email:true}),/Join the Café/);
+ const cafe=S.validate(Object.assign(S.createPublication('program-letter'),{}));assert(cafe);
+ d.sections.find(s=>s.id==='updates').cards[1].imageUrl='https://deploy-preview-8--eddcomstudio.netlify.app/other.jpg';
+ assert(S.validate(d).some(r=>r.level==='warning'&&r.message.includes('preview deploy')));
+});

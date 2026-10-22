@@ -78,7 +78,7 @@ if(c.destination){const l=data.links.find(x=>x.id===c.destination);if(l?.editori
 if(c.imageUrl||c.localImage){imageCount++;if(!c.imageAlt.trim())add('error',`${prefix}: image alt text is missing.`,'Describe the image for readers using assistive technology.',s.id);
 if(c.imageUrl&&!https(c.imageUrl))add('error',`${prefix}: image URL must use HTTPS.`,'',s.id);
 if(c.localImage&&!c.imageUrl)add('error',`${prefix}: local image needs a hosted HTTPS URL for email.`,'Local images are available in draft web previews only. Sign in and choose Host image for email, or enter a hosted HTTPS image URL.',s.id);
-if(https(c.imageUrl)&&/^\/email-images\/preview\//.test(new URL(c.imageUrl).pathname))add('warning',`${prefix}: image is hosted from a preview deploy.`,'Preview-hosted URLs depend on that preview staying available. Upload the image again from the production Studio before distribution.',s.id);
+if(https(c.imageUrl)&&(u=>/^\/email-images\/preview\//.test(u.pathname)||/^[^.]+--[^.]+\.netlify\.app$/.test(u.hostname))(new URL(c.imageUrl)))add('warning',`${prefix}: image is hosted from a preview deploy.`,'Preview-hosted URLs depend on that preview staying available. Upload the image again from the production Studio before distribution.',s.id);
 }
 }}
 if(!results.some(r=>r.level==='error'))add('success','Content checks passed.','Ready for final export; manually verify linked destinations and image access.');
