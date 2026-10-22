@@ -21,7 +21,7 @@ function studio({storage=new Map(),rows=new Map(),offline=false}={}){
   async remove(id){calls.push('remove');rows.delete(id);}
  };
  const context=vm.createContext({console,URLSearchParams,location:{search:''},crypto:require('node:crypto').webcrypto,
-  SubmissionForms:require('../submission-forms'),SubmissionFormsManager:require('../submission-forms-manager'),PrivateHandoff:require('../private-handoff'),Destinations:require('../destinations'),DestinationManager:require('../destinations-manager'),setTimeout:()=>1,clearTimeout:()=>{},EditionStorage:{createClient:()=>api},
+  SubmissionForms:require('../submission-forms'),SubmissionFormsManager:require('../submission-forms-manager'),PrivateHandoff:require('../private-handoff'),ImageHosting:require('../image-hosting'),Destinations:require('../destinations'),DestinationManager:require('../destinations-manager'),setTimeout:()=>1,clearTimeout:()=>{},EditionStorage:{createClient:()=>api},
   localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
   window:{Publications:P,Studio:S,fetch:()=>{},addEventListener:()=>{}},
   document:{addEventListener:(name,fn)=>listeners[name]=fn,querySelectorAll:()=>[],querySelector:selector=>{

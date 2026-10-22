@@ -1,8 +1,10 @@
 # EdD Communications Studio
 
-A communications editor with browser autosave and optional online edition storage through Netlify Functions and Neon Postgres. See [Netlify and Neon setup](NETLIFY-NEON-SETUP.md) for migration, configuration, file changes, and verification. No authentication, subscriber list, email delivery, or university API is included.
+A communications editor with browser autosave and optional online edition storage through Netlify Functions and Neon Postgres. See [Netlify and Neon setup](NETLIFY-NEON-SETUP.md) for migration, configuration, file changes, and verification. Editor sign-in (Netlify Identity) is used only to host images for email; editions and other features remain unauthenticated. No subscriber list, email delivery, or university API is included.
 
 See [Approved Destinations milestone](APPROVED-DESTINATIONS.md) for the registry, manual `002_destinations.sql` migration, optional card dates, and historical link behavior.
+
+See [Hosted email images](IMAGE-HOSTING.md) for signed-in image uploads to Netlify Blobs, editor roles, and the setup required before production.
 
 See [Submission Forms and Private Handoff](SUBMISSION-FORMS-HANDOFF.md) for form metadata, optional destination reuse, portable review/distribution artifacts, and the manual 002 → 003 migration order.
 
@@ -48,7 +50,7 @@ Edition data is separate from presentation. Each card references a link ID. All 
 
 - Checks detect missing edition fields, placeholder copy, empty cards, expired deadlines, incomplete buttons, pending/unapproved/unsafe destinations, image alt text, local-only images, and unconfirmed student/alumni approval. Expired deadlines are reminders; missing required content and approvals are blockers.
 - Link validation checks approval and HTTPS syntax only. It does **not** assert that links work or that images are publicly accessible. Use **Open to verify** and test images in the intended recipient context. The Community Center may require institutional sign-in.
-- Local PNG/JPEG/WebP/GIF uploads are limited to 2 MB each. Browser storage has a total quota; save failures are shown in the header. Download JSON before closing if saving fails. Remote HTTPS URLs are needed for final email export. A remote URL supersedes a local image in rendering.
+- Local PNG/JPEG/WebP/GIF uploads are limited to 2 MB each. Browser storage has a total quota; save failures are shown in the header. Download JSON before closing if saving fails. Remote HTTPS URLs are needed for final email export. Signed-in editors can host PNG/JPEG/WebP uploads automatically (see [Hosted email images](IMAGE-HOSTING.md)). A remote URL supersedes a local image in rendering.
 - HTML is escaped. Arbitrary rich HTML is not accepted. Multiple image cards can represent a gallery; there is no cropper, rich-text editor, or multi-column gallery control.
 - Web export is a standalone document without scripts or external stylesheets. Hosted images still need internet access. Draft web exports can embed local images; draft email exports omit them.
 - Email uses conservative inline styling and presentation tables, including an Outlook conditional width wrapper. Real Gmail, Outlook, mobile-email and sending-platform rendering has not been tested. The browser's email preview is not an email-client emulator.
