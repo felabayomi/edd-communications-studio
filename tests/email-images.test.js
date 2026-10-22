@@ -201,3 +201,16 @@ test('Deploy Preview image hosts are flagged even though they are HTTPS',()=>{
  for(const u of ['https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.jpg','https://eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.png','https://deploy-preview-8--eddcomstudio.netlify.app/x.png'])assert(S.previewHosted(u),u);
  for(const u of ['https://eddcomstudio.netlify.app/email-images/2026/10/a-'+'a'.repeat(32)+'.png','http://deploy-preview-8--x.netlify.app/a.png',''])assert(!S.previewHosted(u),u);
 });
+
+test('a production upload is served and verified with no cookies or Authorization, and a protected site is reported as HTTP 401',async()=>{
+ const h=setup({production:true});
+ const up=await h.api(post(png));assert.equal(up.status,201);
+ const {image}=await up.json();
+ assert.equal(new URL(image.url).origin,site);assert.ok(!image.url.includes('/preview/'));
+ const seen=[];
+ const anonymous=async(url,opts)=>{seen.push(opts);return h.file(new Request(url,{method:opts.method}));};
+ assert.deepEqual(await client.verify(image.url,{fetcher:anonymous}),{type:'image/png'});
+ assert.equal(seen[0].credentials,'omit');assert.equal(seen[0].headers,undefined);
+ const protectedSite=async()=>new Response('Unauthorized',{status:401,headers:{'Content-Type':'text/html'}});
+ await assert.rejects(client.verify(image.url,{fetcher:protectedSite}),/HTTP 401/);
+});
