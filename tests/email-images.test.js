@@ -171,3 +171,20 @@ test('public voter-guide URL and alt text survive web, email and unchanged copy-
  assert(fragment.includes(`src="${url}"`));assert.doesNotMatch(fragment,/display:grid|display:flex|@media/);
  assert.equal(files['content.json'],JSON.stringify(d,null,2));assert.equal(JSON.stringify(d),before);
 });
+
+test('uploaded flyer is never silently omitted from email; HTTPS flyer renders everywhere',()=>{
+ const H=require('../handoff'),local='data:image/png;base64,aGVsbG8=',https='https://example.org/flyer.png';
+ const make=img=>{const d=S.createPublication('program-letter'),sec=d.sections.find(s=>s.id==='updates');sec.cards=[{...S.newCard('resource'),title:'Community Co-working & Café',body:'Open hours.',imageAlt:'Café flyer',...img}];return d;};
+ const d=make({localImage:local});
+ const web=S.render(d,{draft:true}),email=S.render(d,{email:true,draft:true});
+ assert.match(web,/<img src="data:image\/png/);
+ assert.doesNotMatch(email,/data:image/);
+ assert.match(email,/data-image-missing="true"[^>]*>Image not included: &ldquo;Café flyer&rdquo;/);
+ assert.match(H.emailFragment(email),/data-image-missing="true"/);
+ assert.throws(()=>S.makeFiles(d),/blockers/);
+ const h=make({imageUrl:https});
+ for(const html of [S.render(h),S.render(h,{email:true}),H.emailFragment(S.render(h,{email:true}))]){assert(html.includes(`src="${https}"`));assert.doesNotMatch(html,/data-image-missing/);}
+ assert.match(S.render(h,{email:true}),/alt="Café flyer"/);
+ const files=S.makeFiles(Object.assign(make({imageUrl:https}),{}));
+ assert(Object.values(files).some(v=>typeof v==='string'&&v.includes(`src="${https}"`)));
+});
