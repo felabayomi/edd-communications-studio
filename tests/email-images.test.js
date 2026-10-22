@@ -145,10 +145,59 @@ test('hosted voter guide renders email-safe in email and standalone HTML for bot
  }
 });
 
-test('Program Letter image widths fit each surface so Outlook cannot overflow',()=>{
+test('Program Letter images use a centered fluid editorial width within the Outlook email container',()=>{
  const hosted=`${site}/email-images/2026/10/voter-guide-${'c'.repeat(32)}.png`,d=S.createPublication('program-letter');for(const s of d.sections)s.cards=[];
  const add=(sid,type)=>{const s=d.sections.find(s=>s.id===sid);const c={...S.newCard(type),title:'T',body:'B',imageUrl:hosted,imageAlt:'A'};s.cards.push(c);};
  add(d.sections[0].id,'leadership');add(d.sections.at(-1).id,'leadership');add(d.sections[2].id,'spotlight');add(d.sections[3].id,'resource');add(d.sections[4].id,'announcement');
  const widths=[...S.render(d,{email:true}).matchAll(/<img src="https:[^"]+" alt="A" width="(\d+)"/g)].map(m=>Number(m[1])).sort((a,b)=>a-b);
- assert.deepEqual(widths,[502,510,522,530,540]);
+ assert.deepEqual(widths,[480,480,480,480,480]);
+ for(const email of [false,true]){
+  const html=S.render(d,{email}),imgs=[...html.matchAll(/<img src="https:[^"]+" alt="A"[^>]*>/g)];
+  assert.equal(imgs.length,5);
+  for(const [img] of imgs){assert.match(img,/width="480"/);assert.match(img,/width:100%;max-width:480px;height:auto/);assert.match(img,/margin:0 auto 16px/);}
+ }
+});
+
+test('public voter-guide URL and alt text survive web, email and unchanged copy-page generation',()=>{
+ const H=require('../handoff'),P=require('../private-handoff'),d=S.createPublication('program-letter');
+ const url='https://gorgeous-starburst-efcdd3.netlify.app/voter%20guide.png',alt='Voter guide checklist & QR code';
+ const c=voterCard(d);c.imageUrl=url;c.imageAlt=alt;
+ const before=JSON.stringify(d),files=P.bundleFiles(d,{draft:true}),handoff=P.makeFiles(d);
+ for(const html of [S.render(d),S.render(d,{email:true}),files['OPEN-TO-COPY.html'],handoff['OPEN-TO-COPY.html']]){
+  assert(html.includes(`src="${url}"`));assert(html.includes(`alt="${S.escape(alt)}"`));
+  assert.equal((html.match(/voter%20guide\.png/g)||[]).length,1);
+ }
+ const fragment=H.emailFragment(S.render(d,{email:true}));
+ assert(fragment.includes(`src="${url}"`));assert.doesNotMatch(fragment,/display:grid|display:flex|@media/);
+ assert.equal(files['content.json'],JSON.stringify(d,null,2));assert.equal(JSON.stringify(d),before);
+});
+
+test('uploaded flyer is never silently omitted from email; HTTPS flyer renders everywhere',()=>{
+ const H=require('../handoff'),local='data:image/png;base64,aGVsbG8=',https='https://example.org/flyer.png';
+ const make=img=>{const d=S.createPublication('program-letter'),sec=d.sections.find(s=>s.id==='updates');sec.cards=[{...S.newCard('resource'),title:'Community Co-working & Café',body:'Open hours.',imageAlt:'Café flyer',...img}];return d;};
+ const d=make({localImage:local});
+ const web=S.render(d,{draft:true}),email=S.render(d,{email:true,draft:true});
+ assert.match(web,/<img src="data:image\/png/);
+ assert.doesNotMatch(email,/data:image/);
+ assert.match(email,/data-image-missing="true"[^>]*>Image not included: &ldquo;Café flyer&rdquo;/);
+ assert.match(H.emailFragment(email),/data-image-missing="true"/);
+ assert.throws(()=>S.makeFiles(d),/blockers/);
+ const h=make({imageUrl:https});
+ for(const html of [S.render(h),S.render(h,{email:true}),H.emailFragment(S.render(h,{email:true}))]){assert(html.includes(`src="${https}"`));assert.doesNotMatch(html,/data-image-missing/);}
+ assert.match(S.render(h,{email:true}),/alt="Café flyer"/);
+ const files=S.makeFiles(Object.assign(make({imageUrl:https}),{}));
+ assert(Object.values(files).some(v=>typeof v==='string'&&v.includes(`src="${https}"`)));
+});
+
+test('hosted image verification requires an anonymous 200 image response',async()=>{
+ const res=(status,type)=>async(url,opts)=>{assert.equal(opts.credentials,'omit');assert.equal(opts.redirect,'error');return {ok:status<300,status,headers:{get:()=>type}};};
+ assert.deepEqual(await client.verify('https://x.test/a.png',{fetcher:res(200,'image/png')}),{type:'image/png'});
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:res(401,'text/html')}),/HTTP 401/);
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:res(200,'text/html; charset=utf-8')}),/content type/);
+ await assert.rejects(client.verify('https://x.test/a.png',{fetcher:async()=>{throw new Error('redirect');}}),/without signing in/);
+});
+
+test('Deploy Preview image hosts are flagged even though they are HTTPS',()=>{
+ for(const u of ['https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.jpg','https://eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.png','https://deploy-preview-8--eddcomstudio.netlify.app/x.png'])assert(S.previewHosted(u),u);
+ for(const u of ['https://eddcomstudio.netlify.app/email-images/2026/10/a-'+'a'.repeat(32)+'.png','http://deploy-preview-8--x.netlify.app/a.png',''])assert(!S.previewHosted(u),u);
 });
