@@ -57,14 +57,14 @@ function editorialEdition(){
  return d;
 }
 
-test('Program Letter keeps the restored magazine bands, per-section palette and 720px letter in web and email',()=>{
+test('Program Letter keeps the restored magazine bands, per-section palette with a 900px web letter and 680px email',()=>{
  const d=S.createPublication('program-letter');d.issue.year='2026';d.issue.issueDate='2026-10-27';d.sections=['chair','updates','events','registration','resources','dissertation'].map(id=>d.sections.find(s=>s.id===id));
  for(const [i,s] of d.sections.entries())s.cards=Array.from({length:[1,2,2,1,2,3][i]},(_,j)=>({...S.newCard(i===0?'leadership':'resource'),id:`frozen-${i}-${j}`,title:`Heading ${i}-${j}`,body:`First paragraph ${i}-${j}.\n\nSecond paragraph.`,buttonLabel:'Visit destination',destination:'hub'}));
  d.sections[1].cards[0].imageUrl='https://example.org/guide.png';d.sections[1].cards[0].imageAlt='Guide checklist';d.sections[1].cards[1].type='spotlight';
  const before=JSON.stringify(d),web=S.render(d),email=S.render(d,{email:true});
- assert.equal(hash(web),'f528f0ad8320bb5b52ecc8edc7ef5bfc6835165cb2fb20a5a4a9d43a074c084b');
+ assert.equal(hash(web),'ddd2d39541e44e683106482eacdb48876c304abba2066244bad0a389edd410dc');
  assert.equal(hash(email),'7ce174be2565da791d51cbc02ac19a319508eb2ea9977f93a2a9ba17b252ba14');
- assert.match(web,/\.letter\{max-width:720px/);
+ assert.match(web,/\.letter\{max-width:900px/);assert.match(email,/max-width:680px/);assert.match(web,/padding:36px 28px/);assert.match(email,/padding:36px 44px/);assert(!/padding:\d+px 44px/.test(web.replace(/<footer[\s\S]*$/,'')));
  for(const [bg,accent] of [['#FFFCF7','#302A42'],['#F1F7F9','#183B52'],['#F4F8F4','#173B35'],['#FCF6ED','#7B4932'],['#F7F3F9','#49375C'],['#F2F7FA','#24465C']])for(const html of [web,email]){assert(html.includes(`background-color:${bg}`),bg);assert(html.includes(accent),accent);}
  assert.equal((web.match(/<section class="l-band/g)||[]).length,6);
  let at=-1;for(const s of d.sections)for(const c of s.cards){const next=H.emailFragment(email).indexOf(S.escape(c.title),at+1);assert(next>at);at=next;}
