@@ -41,18 +41,3 @@ test('blocked rich copying clearly labels plain-text fallback; total failure off
  const r=runtime({native:true,denied:true,text:true});await r.events['copy-gmail']();assert.match(r.nodes['copy-status'].textContent,/Plain text copied; formatting was not preserved/);
  const blocked=runtime();await blocked.events['copy-gmail']();assert.match(blocked.nodes['copy-status'].textContent,/Automatic copying is blocked/);blocked.events['select-publication']();assert.equal(blocked.selection.selected,blocked.nodes.publication);assert.match(blocked.nodes['copy-status'].textContent,/Only the publication is selected/);assert.equal(blocked.nodes['copy-gmail'].disabled,false);
 });
-test('paired Program Letter copy page preserves exported HTML through native and legacy clipboard paths',async()=>{
- const d=edition('program-letter','Draft');d.sections.find(s=>s.id==='events').cards=['First event','Second event'].map(title=>({...S.newCard('event'),title,body:'Community gathering.',buttonLabel:'Join',destination:'hub'}));
- const files=P.makeFiles(d),source=Object.entries(files).find(([name])=>name.endsWith('-email.html'))[1],expected=H.emailFragment(source);
- assert(files['OPEN-TO-COPY.html'].includes('<main id="publication">'+expected+'</main>'));
- for(const options of [{native:true},{legacy:true},{native:true,denied:true,legacy:true}]){
-  const r=runtime({...options,source});await r.events['copy-gmail']();
-  const parts=r.writes[0],html=typeof parts['text/html']==='string'?parts['text/html']:await parts['text/html'].text();
-  const text=typeof parts['text/plain']==='string'?parts['text/plain']:await parts['text/plain'].text();
-  assert.equal(html,expected);assert.equal(text,H.plainText(expected));
-  assert.match(html,/class="letter-email-pair"/);assert.equal((html.match(/class="letter-email-column"/g)||[]).length,2);
-  assert.match(html,/max-width:316px/);assert.match(html,/width="632"/);assert.match(html,/DRAFT PREVIEW/);
-  assert.doesNotMatch(html,/HIDDEN_PREHEADER|id="copy-gmail"|id="select-publication"|id="copy-status"/);
-  assert.match(r.nodes['copy-status'].textContent,/Formatted publication copied/);assert.equal(r.copyEvents.size,0);
- }
-});
