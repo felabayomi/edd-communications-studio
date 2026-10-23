@@ -204,6 +204,8 @@ test('compact flyers render as a linked 240px thumbnail while full-width images 
   assert.match(html,/<a href="https:\/\/example.org\/flyer.png"[^>]*><img src="https:\/\/example.org\/flyer.png" alt="Café flyer" width="240"/);
   assert.match(html,/View full size/);
  }
+ sec.cards[0].imageSize='compact-no-link';for(const html of [S.render(d),S.render(d,{email:true})]){assert.match(html,/<a href="https:\/\/example.org\/flyer.png"[^>]*><img [^>]*width="240"/);assert.doesNotMatch(html,/View full size/);}
+ S.parseEdition(JSON.stringify(d));
  sec.cards[0].imageSize='full';assert.doesNotMatch(S.render(d,{email:true}),/width="240"|View full size/);
  delete sec.cards[0].imageSize;assert.doesNotMatch(S.render(d),/View full size/);
  sec.cards[0].imageSize='huge';assert.throws(()=>S.parseEdition(JSON.stringify(d)),/image size/);
