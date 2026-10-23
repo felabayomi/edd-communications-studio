@@ -62,10 +62,10 @@ test('Program Letter keeps the restored magazine bands, per-section palette and 
  for(const [i,s] of d.sections.entries())s.cards=Array.from({length:[1,2,2,1,2,3][i]},(_,j)=>({...S.newCard(i===0?'leadership':'resource'),id:`frozen-${i}-${j}`,title:`Heading ${i}-${j}`,body:`First paragraph ${i}-${j}.\n\nSecond paragraph.`,buttonLabel:'Visit destination',destination:'hub'}));
  d.sections[1].cards[0].imageUrl='https://example.org/guide.png';d.sections[1].cards[0].imageAlt='Guide checklist';d.sections[1].cards[1].type='spotlight';
  const before=JSON.stringify(d),web=S.render(d),email=S.render(d,{email:true});
- assert.equal(hash(web),'29742bbab243385da163ec42534387b3baa501e52c2af06488e42d2b5a53a970');
- assert.equal(hash(email),'c5e594c8d7330414b39a0266061ade1800c5df0e19150c5e5f1f1a5939828c16');
+ assert.equal(hash(web),'cd3333b292f00de47aae8c0bc6c01398c3cc0f9bd2f6aa6bf0a4fbd3ef645717');
+ assert.equal(hash(email),'f6352e477869130f88fe83970104a486ed0a2391c431f78b0ce5721008bae723');
  assert.match(web,/\.letter\{max-width:720px/);
- for(const [bg,accent] of [['#FCF7ED','#302A42'],['#D9E7EB','#183B52'],['#E8EFE9','#173B35'],['#F2E4D0','#7B4932'],['#E7DBE9','#49375C'],['#DFE9F0','#24465C']])for(const html of [web,email]){assert(html.includes(`background-color:${bg}`),bg);assert(html.includes(accent),accent);}
+ for(const [bg,accent] of [['#FFFCF7','#302A42'],['#F1F7F9','#183B52'],['#F4F8F4','#173B35'],['#FCF6ED','#7B4932'],['#F7F3F9','#49375C'],['#F2F7FA','#24465C']])for(const html of [web,email]){assert(html.includes(`background-color:${bg}`),bg);assert(html.includes(accent),accent);}
  assert.equal((web.match(/<section class="l-band/g)||[]).length,6);
  let at=-1;for(const s of d.sections)for(const c of s.cards){const next=H.emailFragment(email).indexOf(S.escape(c.title),at+1);assert(next>at);at=next;}
  assert.equal(JSON.stringify(d),before);

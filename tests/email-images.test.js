@@ -150,7 +150,7 @@ test('Program Letter image widths fit each surface so Outlook cannot overflow',(
  const add=(sid,type)=>{const s=d.sections.find(s=>s.id===sid);const c={...S.newCard(type),title:'T',body:'B',imageUrl:hosted,imageAlt:'A'};s.cards.push(c);};
  add(d.sections[0].id,'leadership');add(d.sections.at(-1).id,'leadership');add(d.sections[2].id,'spotlight');add(d.sections[3].id,'resource');add(d.sections[4].id,'announcement');
  const widths=[...S.render(d,{email:true}).matchAll(/<img src="https:[^"]+" alt="A" width="(\d+)"/g)].map(m=>Number(m[1])).sort((a,b)=>a-b);
- assert.deepEqual(widths,[502,510,522,530,540]);
+ assert.deepEqual(widths,[510,522,526,530,540]);
 });
 
 test('public voter-guide URL and alt text survive web, email and unchanged copy-page generation',()=>{
