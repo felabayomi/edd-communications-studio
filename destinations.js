@@ -47,6 +47,9 @@ function syncEditorial(data,rows,onlyId){
  // Malformed aliases must never change a card's saved CTA.
  for(const link of data.links.filter(l=>l.editorialRegistry===true&&!cardDestinations.has(l.id)&&(!onlyId||l.registryId===onlyId))){
   const row=rows.find(r=>r.id===link.registryId);let values={approved:false};
+  // Registry saves always bump the version, so a different name/URL at the same version is a hand edit
+  // (content.json or the edition links view). Keep it and stop following the registry for this link.
+  if(row&&row.version===link.registryVersion&&(link.url!==row.url||link.label!==row.name)){link.editorialRegistry=false;link.source='Edited in this edition';changed=true;continue;}
   if(row){let approved=true;try{validate(row);}catch{approved=false;}values={label:typeof row.name==='string'?row.name:link.label,url:typeof row.url==='string'?row.url:link.url,registryVersion:row.version,approved};}
   if(values.url!==undefined&&link.url!==values.url)changedUrls.add(link.id);
   for(const [key,value] of Object.entries(values))if(link[key]!==value){link[key]=value;changed=true;}

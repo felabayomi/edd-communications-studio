@@ -202,3 +202,14 @@ test('exposed-form SQL deletion protects editorial-only disabled references afte
   assert.equal(await forms.remove(formId,1),undefined);
  }finally{await db.close();}
 });
+test('hand-edited editorial URLs in content.json survive registry refresh and render as written',()=>{
+ const {data,card}=ready(),row=D.seeds[0],id=add(data,card);
+ const imported=S.parseEdition(JSON.stringify({...data,links:data.links.map(l=>l.id===id?{...l,url:'https://example.org/fixed-link'}:l)}));
+ assert.equal(D.syncEditorial(imported,[row]),true);
+ const link=imported.links.find(l=>l.id===id);
+ assert.equal(link.url,'https://example.org/fixed-link');assert.equal(link.editorialRegistry,false);assert.equal(link.approved,true);
+ assert.equal(D.syncEditorial(imported,[{...row,url:'https://example.org/registry-update',version:row.version+1}]),false);
+ assert.equal(link.url,'https://example.org/fixed-link');
+ assert(S.render(imported).includes('href="https://example.org/fixed-link"'));
+ assert(!S.validate(imported).some(r=>r.message.includes('editorial destination')));
+});
