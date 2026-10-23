@@ -145,17 +145,12 @@ test('hosted voter guide renders email-safe in email and standalone HTML for bot
  }
 });
 
-test('Program Letter images use a centered fluid editorial width within the Outlook email container',()=>{
+test('Program Letter image widths fit each surface so Outlook cannot overflow',()=>{
  const hosted=`${site}/email-images/2026/10/voter-guide-${'c'.repeat(32)}.png`,d=S.createPublication('program-letter');for(const s of d.sections)s.cards=[];
  const add=(sid,type)=>{const s=d.sections.find(s=>s.id===sid);const c={...S.newCard(type),title:'T',body:'B',imageUrl:hosted,imageAlt:'A'};s.cards.push(c);};
  add(d.sections[0].id,'leadership');add(d.sections.at(-1).id,'leadership');add(d.sections[2].id,'spotlight');add(d.sections[3].id,'resource');add(d.sections[4].id,'announcement');
  const widths=[...S.render(d,{email:true}).matchAll(/<img src="https:[^"]+" alt="A" width="(\d+)"/g)].map(m=>Number(m[1])).sort((a,b)=>a-b);
- assert.deepEqual(widths,[480,480,480,480,480]);
- for(const email of [false,true]){
-  const html=S.render(d,{email}),imgs=[...html.matchAll(/<img src="https:[^"]+" alt="A"[^>]*>/g)];
-  assert.equal(imgs.length,5);
-  for(const [img] of imgs){assert.match(img,/width="480"/);assert.match(img,/width:100%;max-width:480px;height:auto/);assert.match(img,/margin:0 auto 16px/);}
- }
+ assert.deepEqual(widths,[502,510,522,530,540]);
 });
 
 test('public voter-guide URL and alt text survive web, email and unchanged copy-page generation',()=>{
@@ -200,4 +195,16 @@ test('hosted image verification requires an anonymous 200 image response',async(
 test('Deploy Preview image hosts are flagged even though they are HTTPS',()=>{
  for(const u of ['https://deploy-preview-8--eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.jpg','https://eddcomstudio.netlify.app/email-images/preview/2026/10/a-'+'a'.repeat(32)+'.png','https://deploy-preview-8--eddcomstudio.netlify.app/x.png'])assert(S.previewHosted(u),u);
  for(const u of ['https://eddcomstudio.netlify.app/email-images/2026/10/a-'+'a'.repeat(32)+'.png','http://deploy-preview-8--x.netlify.app/a.png',''])assert(!S.previewHosted(u),u);
+});
+
+test('compact flyers render as a linked 240px thumbnail while full-width images keep their surface width',()=>{
+ const H=require('../handoff'),url='https://example.org/flyer.png',d=S.createPublication('program-letter'),sec=d.sections.find(s=>s.id==='events');
+ sec.cards=[{...S.newCard('event'),title:'Café',body:'Open hours.',imageUrl:url,imageAlt:'Café flyer',imageSize:'compact'}];
+ for(const html of [S.render(d),S.render(d,{email:true}),H.emailFragment(S.render(d,{email:true}))]){
+  assert.match(html,/<a href="https:\/\/example.org\/flyer.png"[^>]*><img src="https:\/\/example.org\/flyer.png" alt="Café flyer" width="240"/);
+  assert.match(html,/View full size/);
+ }
+ sec.cards[0].imageSize='full';assert.doesNotMatch(S.render(d,{email:true}),/width="240"|View full size/);
+ delete sec.cards[0].imageSize;assert.doesNotMatch(S.render(d),/View full size/);
+ sec.cards[0].imageSize='huge';assert.throws(()=>S.parseEdition(JSON.stringify(d)),/image size/);
 });
